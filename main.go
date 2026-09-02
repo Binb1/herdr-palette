@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -68,6 +69,17 @@ type actionList struct {
 	} `json:"result"`
 }
 
+// clean removes control characters so snapshot-derived text cannot
+// carry terminal escape sequences into the rendered view.
+func clean(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
+}
+
 func herdrBin() string {
 	if p := os.Getenv("HERDR_BIN_PATH"); p != "" {
 		return p
@@ -96,7 +108,7 @@ func loadItems() []item {
 		for _, a := range s.Agents {
 			if a.AgentStatus == "blocked" && !a.Focused {
 				items = append(items, item{
-					section: secJump, title: "Next blocked agent · " + a.Title, dot: "blocked",
+					section: secJump, title: "Next blocked agent · " + clean(a.Title), dot: "blocked",
 					args: []string{"agent", "focus", a.PaneID},
 				})
 				break
@@ -105,12 +117,12 @@ func loadItems() []item {
 		agentTitle := map[string]string{} // workspace -> first agent title
 		for _, a := range s.Agents {
 			if agentTitle[a.WorkspaceID] == "" {
-				agentTitle[a.WorkspaceID] = a.Title
+				agentTitle[a.WorkspaceID] = clean(a.Title)
 			}
 		}
 		for _, w := range s.Workspaces {
 			// Labels already carry the workspace number ("1. Fodmap").
-			title := w.Label
+			title := clean(w.Label)
 			if title == "" {
 				title = fmt.Sprintf("%d.", w.Number)
 			}
@@ -124,7 +136,7 @@ func loadItems() []item {
 		}
 		for _, a := range s.Agents {
 			items = append(items, item{
-				section: secJump, title: a.Title, dot: a.AgentStatus,
+				section: secJump, title: clean(a.Title), dot: a.AgentStatus,
 				args: []string{"agent", "focus", a.PaneID},
 			})
 		}
@@ -137,7 +149,7 @@ func loadItems() []item {
 				continue
 			}
 			items = append(items, item{
-				section: secActions, title: a.Title,
+				section: secActions, title: clean(a.Title),
 				args: []string{"plugin", "action", "invoke", "--plugin", a.PluginID, a.ActionID},
 			})
 		}
@@ -329,8 +341,8 @@ func (m model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "ctrl+c":
 		return m, tea.Quit
 	case "enter":
-		if strings.TrimSpace(m.newName) != "" {
-			return m, m.run(append(m.renameBase, strings.Fields(m.newName)...))
+		if name := strings.TrimSpace(m.newName); name != "" {
+			return m, m.run(append(m.renameBase, name))
 		}
 	case "backspace":
 		if m.newName != "" {
@@ -419,7 +431,9 @@ func (m model) View() string {
 	if end > len(rows) {
 		end = len(rows)
 	}
+	lines := 0
 	for i := m.scroll; i < end; i++ {
+		lines++
 		r := rows[i]
 		if r.itemIdx < 0 {
 			b.WriteString(headSt.Render(r.text) + "\n")
@@ -445,8 +459,9 @@ func (m model) View() string {
 	}
 	if len(m.matches) == 0 {
 		b.WriteString(dimSt.Render("  no matches") + "\n")
+		lines++
 	}
-	for i := end - m.scroll; i < m.listHeight(); i++ {
+	for ; lines < m.listHeight(); lines++ {
 		b.WriteString("\n")
 	}
 
