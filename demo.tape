@@ -1,5 +1,5 @@
 # VHS tape for the README demo. Run: vhs demo.tape
-Output palette.gif
+Output demo.gif
 
 Set FontSize 20
 Set Width 1030

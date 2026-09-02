@@ -3,7 +3,7 @@
 A command palette for [Herdr](https://herdr.dev). It opens in a centered
 popup pane. Type to filter. Press Enter to run. 🐑
 
-![Palette demo](palette.gif)
+![Palette demo](demo.gif)
 
 The palette shows three groups:
 
