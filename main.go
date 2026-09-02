@@ -28,17 +28,18 @@ const (
 var sectionOrder = map[string]int{secJump: 0, secActions: 1, secHerdr: 2}
 
 type item struct {
-	section string
-	title   string   // text shown and matched against
-	dot     string   // agent status ("working", ...) or "" for no dot
-	args    []string // herdr arguments to run on Enter
-	rename  bool     // true for "Rename workspace" (asks for a name first)
+	section    string
+	title      string   // text shown and matched against
+	dot        string   // agent status ("working", ...) or "" for no dot
+	args       []string // herdr arguments to run on Enter
+	renameArgs []string // if set, ask for a name first and append it to these
 }
 
 type snapshot struct {
 	Result struct {
 		Snapshot struct {
 			FocusedWorkspaceID string `json:"focused_workspace_id"`
+			FocusedTabID       string `json:"focused_tab_id"`
 			Workspaces         []struct {
 				WorkspaceID string `json:"workspace_id"`
 				Number      int    `json:"number"`
@@ -51,6 +52,7 @@ type snapshot struct {
 				PaneID      string `json:"pane_id"`
 				WorkspaceID string `json:"workspace_id"`
 				Title       string `json:"terminal_title_stripped"`
+				Focused     bool   `json:"focused"`
 			} `json:"agents"`
 		} `json:"snapshot"`
 	} `json:"result"`
@@ -82,14 +84,24 @@ func herdrJSON(v any, args ...string) error {
 }
 
 // loadItems builds the full item list from the live Herdr state.
-func loadItems() ([]item, string) {
+func loadItems() []item {
 	var items []item
-	focusedWs := ""
+	focusedWs, focusedTab := "", ""
 
 	var snap snapshot
 	if herdrJSON(&snap, "api", "snapshot") == nil {
 		s := snap.Result.Snapshot
 		focusedWs = s.FocusedWorkspaceID
+		focusedTab = s.FocusedTabID
+		for _, a := range s.Agents {
+			if a.AgentStatus == "blocked" && !a.Focused {
+				items = append(items, item{
+					section: secJump, title: "Next blocked agent · " + a.Title, dot: "blocked",
+					args: []string{"agent", "focus", a.PaneID},
+				})
+				break
+			}
+		}
 		agentTitle := map[string]string{} // workspace -> first agent title
 		for _, a := range s.Agents {
 			if agentTitle[a.WorkspaceID] == "" {
@@ -133,10 +145,18 @@ func loadItems() ([]item, string) {
 
 	items = append(items,
 		item{section: secHerdr, title: "New workspace", args: []string{"workspace", "create"}},
-		item{section: secHerdr, title: "Rename workspace", rename: true},
+		item{section: secHerdr, title: "New tab", args: []string{"tab", "create"}},
 		item{section: secHerdr, title: "Reload config", args: []string{"server", "reload-config"}},
 	)
-	return items, focusedWs
+	if focusedWs != "" {
+		items = append(items, item{section: secHerdr, title: "Rename workspace",
+			renameArgs: []string{"workspace", "rename", focusedWs}})
+	}
+	if focusedTab != "" {
+		items = append(items, item{section: secHerdr, title: "Rename tab",
+			renameArgs: []string{"tab", "rename", focusedTab}})
+	}
+	return items
 }
 
 // ---- theme ----
@@ -165,21 +185,19 @@ type row struct {
 }
 
 type model struct {
-	items     []item
-	focusedWs string
-	query     string
-	matches   []fuzzy.Match // over titles of items, grouped by section
-	cursor    int           // index into matches
-	scroll    int
-	width     int
-	height    int
-	renaming  bool
-	newName   string
+	items      []item
+	query      string
+	matches    []fuzzy.Match // over titles of items, grouped by section
+	cursor     int           // index into matches
+	scroll     int
+	width      int
+	height     int
+	renameBase []string // non-nil while asking for a name
+	newName    string
 }
 
 func newModel() model {
-	items, ws := loadItems()
-	m := model{items: items, focusedWs: ws, width: 80, height: 20}
+	m := model{items: loadItems(), width: 80, height: 20}
 	m.filter()
 	return m
 }
@@ -190,13 +208,29 @@ func (t titles) String(i int) string { return t[i].title }
 func (t titles) Len() int            { return len(t) }
 
 func (m *model) filter() {
-	if m.query == "" {
-		m.matches = nil
+	// A leading ">" restricts the search to commands (Actions + Herdr),
+	// like the VS Code palette.
+	q := m.query
+	commandsOnly := strings.HasPrefix(q, ">")
+	if commandsOnly {
+		q = strings.TrimSpace(q[1:])
+	}
+	m.matches = nil
+	if q == "" {
 		for i := range m.items {
 			m.matches = append(m.matches, fuzzy.Match{Index: i})
 		}
 	} else {
-		m.matches = fuzzy.FindFrom(m.query, titles(m.items))
+		m.matches = fuzzy.FindFrom(q, titles(m.items))
+	}
+	if commandsOnly {
+		kept := m.matches[:0]
+		for _, match := range m.matches {
+			if m.items[match.Index].section != secJump {
+				kept = append(kept, match)
+			}
+		}
+		m.matches = kept
 	}
 	sort.SliceStable(m.matches, func(a, b int) bool {
 		sa := sectionOrder[m.items[m.matches[a].Index].section]
@@ -238,11 +272,7 @@ func (m model) listHeight() int {
 	return m.height - 2 // prompt, footer
 }
 
-func (m model) run(it item) tea.Cmd {
-	args := it.args
-	if it.rename {
-		args = append([]string{"workspace", "rename", m.focusedWs}, strings.Fields(m.newName)...)
-	}
+func (m model) run(args []string) tea.Cmd {
 	c := exec.Command(herdrBin(), args...)
 	c.Run()
 	return tea.Quit
@@ -257,7 +287,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		return m.updateMouse(msg)
 	case tea.KeyMsg:
-		if m.renaming {
+		if m.renameBase != nil {
 			return m.updateRename(msg)
 		}
 		switch msg.String() {
@@ -270,11 +300,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			if m.cursor < len(m.matches) {
 				it := m.items[m.matches[m.cursor].Index]
-				if it.rename {
-					m.renaming = true
+				if it.renameArgs != nil {
+					m.renameBase = it.renameArgs
 					return m, nil
 				}
-				return m, m.run(it)
+				return m, m.run(it.args)
 			}
 		case "backspace":
 			if m.query != "" {
@@ -294,13 +324,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		m.renaming = false
+		m.renameBase = nil
 		m.newName = ""
 	case "ctrl+c":
 		return m, tea.Quit
 	case "enter":
-		if strings.TrimSpace(m.newName) != "" && m.focusedWs != "" {
-			return m, m.run(item{rename: true})
+		if strings.TrimSpace(m.newName) != "" {
+			return m, m.run(append(m.renameBase, strings.Fields(m.newName)...))
 		}
 	case "backspace":
 		if m.newName != "" {
@@ -326,7 +356,12 @@ func (m model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		rows := m.rows()
 		if line >= 0 && line < len(rows) {
 			if idx := rows[line].itemIdx; idx >= 0 {
-				return m, m.run(m.items[m.matches[idx].Index])
+				it := m.items[m.matches[idx].Index]
+				if it.renameArgs != nil {
+					m.renameBase = it.renameArgs
+					return m, nil
+				}
+				return m, m.run(it.args)
 			}
 		}
 	}
@@ -370,10 +405,12 @@ func (m model) View() string {
 
 	var b strings.Builder
 
-	if m.renaming {
+	if m.renameBase != nil {
 		b.WriteString(accSt.Render("Rename to: ") + textSt.Render(m.newName) + accSt.Render("▌"))
+	} else if m.query == "" {
+		b.WriteString(accSt.Render("▌") + dimSt.Render(" search · > commands"))
 	} else {
-		b.WriteString(accSt.Render("› ") + textSt.Render(m.query) + accSt.Render("▌"))
+		b.WriteString(textSt.Render(m.query) + accSt.Render("▌"))
 	}
 	b.WriteString("\n")
 

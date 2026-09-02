@@ -6,11 +6,12 @@ popup pane. Type to filter. Press Enter to run. 🐑
 The palette shows three groups:
 
 1. **Jump** — Herdr workspaces and agents, with live status dots.
-   Enter focuses the selection.
+   Enter focuses the selection. When an agent waits for input, the
+   group starts with a "Next blocked agent" entry.
 2. **Actions** — actions from all installed Herdr plugins.
    Enter invokes the action.
-3. **Herdr** — built-in commands: new workspace, rename workspace,
-   reload config.
+3. **Herdr** — built-in commands: new workspace, new tab, rename
+   workspace, rename tab, reload config.
 
 ## Requirements
 
@@ -59,6 +60,7 @@ description = "Command palette"
 | Key | Effect |
 |---|---|
 | type | Filter the list (fuzzy match) |
+| `>` | Filter commands only (Actions and Herdr groups) |
 | `↑` `↓` | Move the selection |
 | `Enter` | Run the selected entry |
 | `Esc` | Close the palette |
