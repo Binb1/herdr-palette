@@ -1,6 +1,6 @@
 id = "binb1.palette"
 name = "Palette"
-version = "0.2.0"
+version = "0.2.1"
 description = "Command palette for Herdr. Jump to workspaces and agents, run plugin actions, run Herdr commands."
 min_herdr_version = "0.8.0"
 platforms = ["macos", "linux"]
