@@ -1,0 +1,23 @@
+id = "binb1.palette"
+name = "Palette"
+version = "0.1.0"
+description = "Command palette for Herdr. Jump to workspaces and agents, run plugin actions, run Herdr commands."
+min_herdr_version = "0.8.0"
+platforms = ["macos", "linux"]
+
+[[build]]
+command = ["go", "build", "-o", "herdr-palette", "."]
+
+[[actions]]
+id = "open"
+title = "Open command palette"
+contexts = ["global"]
+command = ["sh", "-c", "exec \"$HERDR_BIN_PATH\" plugin pane open --plugin binb1.palette --entrypoint palette"]
+
+[[panes]]
+id = "palette"
+title = "Palette"
+placement = "popup"
+width = "55%"
+height = 20
+command = ["./herdr-palette"]
