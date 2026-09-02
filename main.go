@@ -450,8 +450,8 @@ func (m model) View() string {
 		b.WriteString("\n")
 	}
 
-	footer := dimSt.Render("🐑") + strings.Repeat(" ", max(1, w-24)) + dimSt.Render("↑↓ move · ↵ run · esc")
-	b.WriteString(footer)
+	hints := "↑↓ move · ↵ run · esc"
+	b.WriteString(strings.Repeat(" ", max(1, w-len([]rune(hints)))) + dimSt.Render(hints))
 
 	// Indent every line by one column so text clears Herdr's border.
 	return " " + strings.ReplaceAll(b.String(), "\n", "\n ")
