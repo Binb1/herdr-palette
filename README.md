@@ -41,6 +41,15 @@ herdr server reload-config
 
 Press `prefix+f` inside a Herdr session to open the palette.
 
+Optional: bind `Cmd+P` in your terminal. The terminal must send the
+Herdr prefix sequence. For Ghostty:
+
+```
+keybind = cmd+p=text:\x02f
+```
+
+(`\x02` is Ctrl+B, the default Herdr prefix.)
+
 ## Keys
 
 | Key | Effect |
