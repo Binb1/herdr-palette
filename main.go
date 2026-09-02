@@ -228,16 +228,15 @@ func (m model) rows() []row {
 
 // ---- layout constants ----
 
+// Herdr draws the popup border and title. The app fills the pane:
+// one prompt line, the list, one footer line, with a 1-column margin.
+
 func (m model) panelWidth() int {
-	w := m.width - 2
-	if w > 64 {
-		w = 64
-	}
-	return w
+	return m.width - 2
 }
 
 func (m model) listHeight() int {
-	return m.height - 4 // border top/bottom, prompt, footer
+	return m.height - 2 // prompt, footer
 }
 
 func (m model) run(it item) tea.Cmd {
@@ -323,12 +322,10 @@ func (m model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	case tea.MouseWheelDown:
 		m.moveCursor(1)
 	case tea.MouseLeft:
-		// The list starts after the panel's top border and prompt line.
-		panelX := (m.width - m.panelWidth() - 2) / 2
-		listTop := 2
-		line := msg.Y - listTop + m.scroll
+		// Row 0 is the prompt line, the list starts on row 1.
+		line := msg.Y - 1 + m.scroll
 		rows := m.rows()
-		if msg.X > panelX && msg.X < panelX+m.panelWidth()+1 && line >= 0 && line < len(rows) {
+		if line >= 0 && line < len(rows) {
 			if idx := rows[line].itemIdx; idx >= 0 {
 				return m, m.run(m.items[m.matches[idx].Index])
 			}
@@ -419,12 +416,8 @@ func (m model) View() string {
 	footer := dimSt.Render("🐑") + strings.Repeat(" ", max(1, w-24)) + dimSt.Render("↑↓ move · ↵ run · esc")
 	b.WriteString(footer)
 
-	panel := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(th.dim).
-		Width(w).
-		Render(b.String())
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Top, panel)
+	// Indent every line by one column so text clears Herdr's border.
+	return " " + strings.ReplaceAll(b.String(), "\n", "\n ")
 }
 
 // highlight renders s with the matched byte indexes in the accent style.

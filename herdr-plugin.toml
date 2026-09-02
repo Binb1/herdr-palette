@@ -18,6 +18,6 @@ command = ["sh", "-c", "if pgrep -x herdr-palette >/dev/null; then pkill -x herd
 id = "palette"
 title = "Palette"
 placement = "popup"
-width = "55%"
+width = 72
 height = 20
 command = ["./herdr-palette"]
