@@ -39,16 +39,20 @@ Reload the config:
 herdr server reload-config
 ```
 
-Press `prefix+f` inside a Herdr session to open the palette.
+Press `prefix+f` inside a Herdr session to toggle the palette. The
+action opens the palette when it is closed. It closes the palette when
+it is open.
 
-Optional: bind `Cmd+P` in your terminal. The terminal must send the
-Herdr prefix sequence. For Ghostty:
+Optional: bind `Cmd+P` directly. This needs a terminal that forwards
+the cmd key, such as Ghostty:
 
+```toml
+[[keys.command]]
+key = "cmd+p"
+type = "plugin_action"
+command = "binb1.palette.open"
+description = "Command palette"
 ```
-keybind = cmd+p=text:\x02f
-```
-
-(`\x02` is Ctrl+B, the default Herdr prefix.)
 
 ## Keys
 

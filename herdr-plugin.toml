@@ -10,9 +10,9 @@ command = ["go", "build", "-o", "herdr-palette", "."]
 
 [[actions]]
 id = "open"
-title = "Open command palette"
+title = "Toggle command palette"
 contexts = ["global"]
-command = ["sh", "-c", "exec \"$HERDR_BIN_PATH\" plugin pane open --plugin binb1.palette --entrypoint palette"]
+command = ["sh", "-c", "if pgrep -x herdr-palette >/dev/null; then pkill -x herdr-palette; else exec \"$HERDR_BIN_PATH\" plugin pane open --plugin binb1.palette --entrypoint palette; fi"]
 
 [[panes]]
 id = "palette"
