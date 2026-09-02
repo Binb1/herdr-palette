@@ -357,27 +357,38 @@ func (m model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.MouseWheelUp:
+	switch {
+	case msg.Button == tea.MouseButtonWheelUp:
 		m.moveCursor(-1)
-	case tea.MouseWheelDown:
+	case msg.Button == tea.MouseButtonWheelDown:
 		m.moveCursor(1)
-	case tea.MouseLeft:
-		// Row 0 is the prompt line, the list starts on row 1.
-		line := msg.Y - 1 + m.scroll
-		rows := m.rows()
-		if line >= 0 && line < len(rows) {
-			if idx := rows[line].itemIdx; idx >= 0 {
-				it := m.items[m.matches[idx].Index]
-				if it.renameArgs != nil {
-					m.renameBase = it.renameArgs
-					return m, nil
-				}
-				return m, m.run(it.args)
+	case msg.Action == tea.MouseActionMotion:
+		// Hover moves the selection, so the palette tracks the pointer.
+		if idx := m.itemAt(msg.Y); idx >= 0 {
+			m.cursor = idx
+		}
+	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft:
+		if idx := m.itemAt(msg.Y); idx >= 0 {
+			it := m.items[m.matches[idx].Index]
+			if it.renameArgs != nil {
+				m.renameBase = it.renameArgs
+				return m, nil
 			}
+			return m, m.run(it.args)
 		}
 	}
 	return m, nil
+}
+
+// itemAt maps a terminal row to a filtered-match index, or -1 for
+// the prompt line, a section header, or empty space.
+func (m model) itemAt(y int) int {
+	line := y - 1 + m.scroll // row 0 is the prompt line
+	rows := m.rows()
+	if line >= 0 && line < len(rows) {
+		return rows[line].itemIdx
+	}
+	return -1
 }
 
 func (m *model) moveCursor(delta int) {
