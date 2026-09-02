@@ -1,12 +1,15 @@
 id = "binb1.palette"
 name = "Palette"
-version = "0.1.0"
+version = "0.2.0"
 description = "Command palette for Herdr. Jump to workspaces and agents, run plugin actions, run Herdr commands."
 min_herdr_version = "0.8.0"
 platforms = ["macos", "linux"]
 
+# Download the prebuilt binary for this platform from the matching GitHub
+# Release (no Go toolchain needed). `herdr plugin link` skips this — for a
+# local checkout, run: go build -o bin/herdr-palette .
 [[build]]
-command = ["go", "build", "-o", "herdr-palette", "."]
+command = ["bash", "install.sh"]
 
 [[actions]]
 id = "open"
@@ -20,4 +23,4 @@ title = "Palette"
 placement = "popup"
 width = 72
 height = 20
-command = ["./herdr-palette"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-palette\""]

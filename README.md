@@ -3,6 +3,8 @@
 A command palette for [Herdr](https://herdr.dev). It opens in a centered
 popup pane. Type to filter. Press Enter to run. 🐑
 
+![Palette demo](palette.gif)
+
 The palette shows three groups:
 
 1. **Jump** — Herdr workspaces and agents, with live status dots.
@@ -16,7 +18,10 @@ The palette shows three groups:
 ## Requirements
 
 - Herdr 0.8.0 or later.
-- Go 1.21 or later. The install step compiles one static binary.
+
+The install step downloads one prebuilt static binary from GitHub
+Releases and verifies its checksum. No toolchain is needed. Prebuilt
+platforms: macOS and Linux, arm64 and amd64.
 
 ## Install
 
@@ -81,13 +86,20 @@ Each Jump entry shows the agent status as a colored dot:
 
 ## Development
 
+A local checkout needs Go 1.21 or later:
+
 ```sh
-go build -o herdr-palette .
+go build -o bin/herdr-palette .
 herdr plugin link .
 herdr plugin action invoke binb1.palette.open
 ```
 
 `herdr plugin log list --plugin binb1.palette` shows process logs.
+`vhs demo.tape` re-records the README GIF.
+
+Releases: bump `version` in `herdr-plugin.toml`, merge, then push the
+matching tag (`vX.Y.Z`). GitHub Actions runs goreleaser and publishes
+the binaries the install step downloads.
 
 ## Limits
 
