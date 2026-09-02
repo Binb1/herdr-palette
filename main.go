@@ -142,8 +142,8 @@ func loadItems() ([]item, string) {
 // ---- theme ----
 
 type theme struct {
-	text, dim, header, accent, selBg lipgloss.AdaptiveColor
-	status                           map[string]lipgloss.Color
+	text, dim, header, accent lipgloss.AdaptiveColor
+	status                    map[string]lipgloss.Color
 }
 
 // Catppuccin Mocha (dark) / Latte (light). Status dots match Robin's SwiftBar plugin.
@@ -152,7 +152,6 @@ var th = theme{
 	dim:    lipgloss.AdaptiveColor{Dark: "#6C7086", Light: "#8C8FA1"},
 	header: lipgloss.AdaptiveColor{Dark: "#CBA6F7", Light: "#8839EF"},
 	accent: lipgloss.AdaptiveColor{Dark: "#F8BC82", Light: "#FE640B"},
-	selBg:  lipgloss.AdaptiveColor{Dark: "#313244", Light: "#CCD0DA"},
 	status: map[string]lipgloss.Color{
 		"working": "#E8A33D", "blocked": "#E35D6A", "done": "#5BB974", "idle": "#98989D",
 	},
@@ -368,7 +367,6 @@ func (m model) View() string {
 	dimSt := lipgloss.NewStyle().Foreground(th.dim)
 	headSt := lipgloss.NewStyle().Foreground(th.header).Bold(true)
 	accSt := lipgloss.NewStyle().Foreground(th.accent)
-	selSt := lipgloss.NewStyle().Background(th.selBg)
 
 	var b strings.Builder
 
@@ -393,17 +391,19 @@ func (m model) View() string {
 		match := m.matches[r.itemIdx]
 		it := m.items[match.Index]
 		line := "  "
+		if r.itemIdx == m.cursor {
+			line = accSt.Render("› ")
+		}
 		if it.dot != "" {
 			c, ok := th.status[it.dot]
 			if !ok {
 				c = th.status["idle"]
 			}
-			line = lipgloss.NewStyle().Foreground(c).Render("●") + " "
+			line += lipgloss.NewStyle().Foreground(c).Render("●") + " "
+		} else {
+			line += "  "
 		}
 		line += highlight(it.title, match.MatchedIndexes, textSt, accSt.Bold(true))
-		if r.itemIdx == m.cursor {
-			line = selSt.Render(lipgloss.NewStyle().Inline(true).MaxWidth(w).Render(line + strings.Repeat(" ", w)))
-		}
 		b.WriteString(line + "\n")
 	}
 	if len(m.matches) == 0 {
