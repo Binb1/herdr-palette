@@ -3,6 +3,8 @@
 A command palette for [Herdr](https://herdr.dev). It opens in a centered
 popup pane. Type to filter. Press Enter to run. 🐑
 
+![The palette in a Herdr session](screenshot.png)
+
 ![Palette demo](demo.gif)
 
 The palette shows three groups:
