@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -34,22 +35,26 @@ type paneRect struct {
 	X, Y, Width, Height int
 }
 
+type layoutPane struct {
+	PaneID string   `json:"pane_id"`
+	Rect   paneRect `json:"rect"`
+}
+
 type layoutSnap struct {
 	Result struct {
 		Snapshot struct {
-			Panes []struct {
+			FocusedWorkspaceID string `json:"focused_workspace_id"`
+			FocusedTabID       string `json:"focused_tab_id"`
+			FocusedPaneID      string `json:"focused_pane_id"`
+			Panes              []struct {
 				PaneID string `json:"pane_id"`
 			} `json:"panes"`
 			Layouts []struct {
-				TabID         string `json:"tab_id"`
-				FocusedPaneID string `json:"focused_pane_id"`
-				Area          struct {
+				TabID string `json:"tab_id"`
+				Area  struct {
 					Width int `json:"width"`
 				} `json:"area"`
-				Panes []struct {
-					PaneID string   `json:"pane_id"`
-					Rect   paneRect `json:"rect"`
-				} `json:"panes"`
+				Panes []layoutPane `json:"panes"`
 			} `json:"layouts"`
 		} `json:"snapshot"`
 	} `json:"result"`
@@ -135,27 +140,26 @@ func phoneOn(auto bool) error {
 		if len(l.Panes) < 2 {
 			continue
 		}
-		keep := l.FocusedPaneID
-		if keep == "" {
-			keep = l.Panes[0].PaneID
-		}
-		var keepRect paneRect
-		for _, p := range l.Panes {
-			if p.PaneID == keep {
-				keepRect = p.Rect
+		// Order panes left-to-right, top-to-bottom. The first stays as
+		// the anchor; every other pane is to its right or below, so the
+		// restore can rebuild the row by chaining each onto the previous.
+		ordered := append([]layoutPane(nil), l.Panes...)
+		sort.Slice(ordered, func(a, b int) bool {
+			if ordered[a].Rect.X != ordered[b].Rect.X {
+				return ordered[a].Rect.X < ordered[b].Rect.X
 			}
-		}
-		for _, p := range l.Panes {
-			if p.PaneID == keep {
-				continue
-			}
+			return ordered[a].Rect.Y < ordered[b].Rect.Y
+		})
+		prev := ordered[0]
+		for _, p := range ordered[1:] {
 			if exec.Command(herdrBin(), "pane", "move", p.PaneID, "--new-tab").Run() != nil {
 				continue
 			}
-			dir, ratio := splitFor(keepRect, p.Rect)
+			dir, ratio := splitFor(prev.Rect, p.Rect)
 			moves = append(moves, phoneMove{
-				PaneID: p.PaneID, TabID: l.TabID, Target: keep, Split: dir, Ratio: ratio,
+				PaneID: p.PaneID, TabID: l.TabID, Target: prev.PaneID, Split: dir, Ratio: ratio,
 			})
+			prev = p
 		}
 	}
 	if len(moves) == 0 {
@@ -187,9 +191,13 @@ func phoneOff() error {
 	for _, p := range s.Result.Snapshot.Panes {
 		exists[p.PaneID] = true
 	}
-	// Reverse order rebuilds nested splits closest to the original.
-	for i := len(moves) - 1; i >= 0; i-- {
-		mv := moves[i]
+	// Remember what is focused now, so the moves do not steal focus.
+	focusWs := s.Result.Snapshot.FocusedWorkspaceID
+	focusTab := s.Result.Snapshot.FocusedTabID
+	focusPane := s.Result.Snapshot.FocusedPaneID
+	// Forward order: each pane attaches to the previous pane in the row,
+	// which is already back in place, so the original order is preserved.
+	for _, mv := range moves {
 		if !exists[mv.PaneID] {
 			continue // the pane closed while phone mode was on
 		}
@@ -201,7 +209,20 @@ func phoneOff() error {
 			exec.Command(herdrBin(), "pane", "move", mv.PaneID, "--tab", mv.TabID).Run()
 		}
 	}
-	return os.Remove(stateFile())
+	if err := os.Remove(stateFile()); err != nil {
+		return err
+	}
+	// Restore the focus the moves disturbed.
+	if focusWs != "" {
+		exec.Command(herdrBin(), "workspace", "focus", focusWs).Run()
+	}
+	if focusTab != "" {
+		exec.Command(herdrBin(), "tab", "focus", focusTab).Run()
+	}
+	if focusPane != "" {
+		exec.Command(herdrBin(), "pane", "focus", "--pane", focusPane).Run()
+	}
+	return nil
 }
 
 // phoneAuto runs from the layout.updated event hook. A narrow layout
