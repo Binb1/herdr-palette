@@ -93,6 +93,12 @@ attached over SSH or mosh. Every pane in a split tab moves to its own
 tab, so each pane gets the full width. "Exit phone mode" moves every
 pane back and restores the splits.
 
+Phone mode is also automatic. When a client makes the layout narrower
+than 60 columns, the plugin engages phone mode. When the layout is
+wide again, the plugin restores the splits. The automatic exit only
+undoes an automatic entry: a manual "Phone mode" stays until a manual
+"Exit phone mode".
+
 Notes:
 
 - Two-pane splits restore exactly. Deeper nested splits restore with
