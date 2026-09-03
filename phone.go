@@ -70,6 +70,19 @@ func phoneModeActive() bool {
 	return err == nil
 }
 
+// A manual exit sets a suppress marker so the auto hook does not
+// re-engage while a narrow client is still attached (a mosh phone stays
+// attached when backgrounded). A wide layout clears it, so a later
+// narrow client engages again.
+func suppressFile() string { return stateFile() + ".suppress" }
+
+func setSuppress()   { os.WriteFile(suppressFile(), []byte("1"), 0o644) }
+func clearSuppress() { os.Remove(suppressFile()) }
+func suppressed() bool {
+	_, err := os.Stat(suppressFile())
+	return err == nil
+}
+
 // splitFor derives the split to recreate p beside keep on restore.
 func splitFor(keep, p paneRect) (string, float64) {
 	if p.Y != keep.Y {
@@ -209,19 +222,25 @@ func phoneAuto() error {
 	if width == 0 {
 		return nil
 	}
-	narrow := width < phoneWidth
-	if narrow && !phoneModeActive() {
-		return phoneOn(true)
+	if width >= phoneWidth {
+		// A wide layout means the narrow client is gone. Clear any manual
+		// suppression and undo an automatic engage.
+		clearSuppress()
+		if phoneModeActive() {
+			data, err := os.ReadFile(stateFile())
+			if err != nil {
+				return nil
+			}
+			var st phoneState
+			if json.Unmarshal(data, &st) == nil && st.Auto {
+				return phoneOff()
+			}
+		}
+		return nil
 	}
-	if !narrow && phoneModeActive() {
-		data, err := os.ReadFile(stateFile())
-		if err != nil {
-			return nil
-		}
-		var st phoneState
-		if json.Unmarshal(data, &st) == nil && st.Auto {
-			return phoneOff()
-		}
+	// Narrow layout: engage unless already on or manually suppressed.
+	if !phoneModeActive() && !suppressed() {
+		return phoneOn(true)
 	}
 	return nil
 }
@@ -230,9 +249,19 @@ func phoneMain(mode string) {
 	var err error
 	switch mode {
 	case "on":
+		clearSuppress()
 		err = phoneOn(false)
 	case "off":
+		setSuppress()
 		err = phoneOff()
+	case "toggle":
+		if phoneModeActive() {
+			setSuppress()
+			err = phoneOff()
+		} else {
+			clearSuppress()
+			err = phoneOn(false)
+		}
 	case "auto":
 		// Hook runs are frequent and racing ones are expected: stay quiet.
 		if err := phoneAuto(); err != nil {
@@ -240,7 +269,7 @@ func phoneMain(mode string) {
 		}
 		return
 	default:
-		err = fmt.Errorf("usage: herdr-palette phone <on|off|auto>")
+		err = fmt.Errorf("usage: herdr-palette phone <on|off|toggle|auto>")
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

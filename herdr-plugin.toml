@@ -11,6 +11,13 @@ platforms = ["macos", "linux"]
 [[build]]
 command = ["bash", "install.sh"]
 
+# Toggle phone mode from a keybinding or `herdr plugin action invoke`.
+[[actions]]
+id = "phone"
+title = "Toggle phone mode"
+contexts = ["global"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-palette\" phone toggle"]
+
 [[actions]]
 id = "open"
 title = "Toggle command palette"
