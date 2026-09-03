@@ -33,6 +33,7 @@ type item struct {
 	title      string   // text shown and matched against
 	dot        string   // agent status ("working", ...) or "" for no dot
 	args       []string // herdr arguments to run on Enter
+	selfArgs   []string // if set, run this binary with these arguments instead
 	renameArgs []string // if set, ask for a name first and append it to these
 }
 
@@ -168,6 +169,13 @@ func loadItems() []item {
 		items = append(items, item{section: secHerdr, title: "Rename tab",
 			renameArgs: []string{"tab", "rename", focusedTab}})
 	}
+	if phoneModeActive() {
+		items = append(items, item{section: secHerdr, title: "Exit phone mode",
+			selfArgs: []string{"phone", "off"}})
+	} else {
+		items = append(items, item{section: secHerdr, title: "Phone mode",
+			selfArgs: []string{"phone", "on"}})
+	}
 	return items
 }
 
@@ -285,9 +293,29 @@ func (m model) listHeight() int {
 }
 
 func (m model) run(args []string) tea.Cmd {
-	c := exec.Command(herdrBin(), args...)
+	return m.runBin(herdrBin(), args)
+}
+
+func (m model) runBin(bin string, args []string) tea.Cmd {
+	c := exec.Command(bin, args...)
 	c.Run()
 	return tea.Quit
+}
+
+// choose activates an entry: enter rename mode, run this binary, or run herdr.
+func (m model) choose(it item) (tea.Model, tea.Cmd) {
+	if it.renameArgs != nil {
+		m.renameBase = it.renameArgs
+		return m, nil
+	}
+	if it.selfArgs != nil {
+		self, err := os.Executable()
+		if err != nil {
+			return m, tea.Quit
+		}
+		return m, m.runBin(self, it.selfArgs)
+	}
+	return m, m.run(it.args)
 }
 
 func (m model) Init() tea.Cmd { return nil }
@@ -311,12 +339,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveCursor(1)
 		case "enter":
 			if m.cursor < len(m.matches) {
-				it := m.items[m.matches[m.cursor].Index]
-				if it.renameArgs != nil {
-					m.renameBase = it.renameArgs
-					return m, nil
-				}
-				return m, m.run(it.args)
+				return m.choose(m.items[m.matches[m.cursor].Index])
 			}
 		case "backspace":
 			if m.query != "" {
@@ -369,12 +392,7 @@ func (m model) updateMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		}
 	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft:
 		if idx := m.itemAt(msg.Y); idx >= 0 {
-			it := m.items[m.matches[idx].Index]
-			if it.renameArgs != nil {
-				m.renameBase = it.renameArgs
-				return m, nil
-			}
-			return m, m.run(it.args)
+			return m.choose(m.items[m.matches[idx].Index])
 		}
 	}
 	return m, nil
@@ -501,6 +519,14 @@ func highlight(s string, matched []int, base, hit lipgloss.Style) string {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "phone" {
+		mode := ""
+		if len(os.Args) > 2 {
+			mode = os.Args[2]
+		}
+		phoneMain(mode)
+		return
+	}
 	p := tea.NewProgram(newModel(), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

@@ -15,7 +15,7 @@ The palette shows three groups:
 2. **Actions** — actions from all installed Herdr plugins.
    Enter invokes the action.
 3. **Herdr** — built-in commands: new workspace, new tab, rename
-   workspace, rename tab, reload config.
+   workspace, rename tab, reload config, phone mode.
 
 ## Requirements
 
@@ -85,6 +85,21 @@ Each Jump entry shows the agent status as a colored dot:
 - ⚪ `idle` — no active task
 
 (The palette renders small colored dots, not emoji.)
+
+## Phone mode
+
+"Phone mode" flattens the layout for a narrow client, such as a phone
+attached over SSH or mosh. Every pane in a split tab moves to its own
+tab, so each pane gets the full width. "Exit phone mode" moves every
+pane back and restores the splits.
+
+Notes:
+
+- Two-pane splits restore exactly. Deeper nested splits restore with
+  the right panes in the right tabs, but the geometry can differ.
+- A pane closed during phone mode is skipped on restore.
+- The state lives in one JSON file in the plugin state directory. The
+  palette shows "Exit phone mode" while that file exists.
 
 ## Development
 
