@@ -93,6 +93,24 @@ attached over SSH or mosh. Every pane in a split tab moves to its own
 tab, so each pane gets the full width. "Exit phone mode" moves every
 pane back and restores the splits.
 
+Phone mode is also automatic. When a client makes the layout narrower
+than 60 columns, the plugin engages phone mode. When the layout is
+wide again, the plugin restores the splits. The automatic exit only
+undoes an automatic entry: a manual "Phone mode" stays until a manual
+"Exit phone mode".
+
+The automatic exit needs the layout to grow wide again. A mosh client
+stays attached when the phone app is backgrounded, so the layout stays
+narrow until the phone session ends. Herdr also sizes a shared session
+to its smallest client, so a phone and a desktop attached together
+both see the phone width. To restore the splits on the desktop while
+the phone is still attached, run "Exit phone mode" (or the toggle
+action). A manual exit is remembered, so the automatic hook does not
+re-engage until the layout goes wide again.
+
+The `binb1.palette.phone` action toggles phone mode. Bind it to a key,
+or invoke it with `herdr plugin action invoke binb1.palette.phone`.
+
 Notes:
 
 - Two-pane splits restore exactly. Deeper nested splits restore with

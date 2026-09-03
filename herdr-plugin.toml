@@ -11,11 +11,25 @@ platforms = ["macos", "linux"]
 [[build]]
 command = ["bash", "install.sh"]
 
+# Toggle phone mode from a keybinding or `herdr plugin action invoke`.
+[[actions]]
+id = "phone"
+title = "Toggle phone mode"
+contexts = ["global"]
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-palette\" phone toggle"]
+
 [[actions]]
 id = "open"
 title = "Toggle command palette"
 contexts = ["global"]
 command = ["sh", "-c", "if pgrep -x herdr-palette >/dev/null; then pkill -x herdr-palette; else exec \"$HERDR_BIN_PATH\" plugin pane open --plugin binb1.palette --entrypoint palette; fi"]
+
+# Auto phone mode: a narrow client (a phone over mosh) shrinks the
+# layout; the hook flattens splits into tabs and restores them when the
+# layout is wide again. Manual palette activations are never auto-undone.
+[[events]]
+on = "layout.updated"
+command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-palette\" phone auto"]
 
 [[panes]]
 id = "palette"
