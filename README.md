@@ -62,6 +62,26 @@ command = "binb1.palette.open"
 description = "Command palette"
 ```
 
+### Remote servers and VMs
+
+Herdr installs plugins per machine, and never copies them to SSH
+hosts. When you drive a remote server — `herdr --remote host`, or a
+machine saved with `herdr machine add` — your local keybindings and
+theme still apply, but plugin actions and panes are served by the
+machine that hosts the session.
+
+So if the palette is installed only on your laptop, the
+`binb1.palette.open` action does not exist on the remote server and
+the keybinding does nothing there. Install it on the server too:
+
+```sh
+ssh host 'herdr plugin install Binb1/herdr-palette'
+```
+
+Repeat for every saved machine. The remote host needs Herdr 0.8.0 or
+later (`min_herdr_version`). Installing on the client alone covers
+Local workspaces only.
+
 ## Keys
 
 | Key | Effect |
