@@ -181,7 +181,7 @@ func switchSession(target string) error {
 	}
 	wrappers, clients := wrappedClients(cur)
 	if len(clients) == 0 {
-		return fmt.Errorf("start Herdr with herdr-palette attach to switch")
+		return fmt.Errorf("this window was not started with herdr-palette attach (h)")
 	}
 	for i, w := range wrappers {
 		os.WriteFile(switchFile(w), []byte(target), 0o644)

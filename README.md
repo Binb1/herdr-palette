@@ -7,19 +7,17 @@ popup pane. Type to filter. Press Enter to run. 🐑
 
 ![Palette demo](demo.gif)
 
-The palette shows three groups:
+The palette shows four groups:
 
 1. **Jump** — Herdr workspaces and agents, with live status dots.
    Enter focuses the selection. When an agent waits for input, the
    group starts with a "Next blocked agent" entry.
-2. **Actions** — actions from all installed Herdr plugins.
+2. **Sessions** — Herdr sessions, with live status dots. Enter
+   switches the window to that session. See [Sessions](#sessions).
+3. **Actions** — actions from all installed Herdr plugins.
    Enter invokes the action.
-3. **Herdr** — built-in commands: new workspace, new tab, rename
-   workspace, rename tab, reload config, phone mode, switch session,
-   new session.
-
-"Switch session…" (or typing `@`) lists Herdr sessions. See
-[Sessions](#sessions).
+4. **Herdr** — built-in commands: new workspace, new tab, rename
+   workspace, rename tab, reload config, phone mode.
 
 ## Requirements
 
@@ -92,7 +90,7 @@ Local workspaces only.
 |---|---|
 | type | Filter the list (fuzzy match) |
 | `>` | Filter commands only (Actions and Herdr groups) |
-| `@` | List Herdr sessions (see [Sessions](#sessions)) |
+| `@` | Filter sessions only |
 | `↑` `↓` | Move the selection |
 | `Enter` | Run the selected entry |
 | `Esc` | Close the palette |
@@ -114,12 +112,10 @@ Each Jump entry shows the agent status as a colored dot:
 ## Sessions
 
 Named Herdr sessions keep contexts apart: a session for a client shows
-none of the workspaces or agents of your other sessions. Run "Switch
-session…" or type `@` in the palette to list every session, with a status dot for each running
-one. Enter switches the current window to that session. "New session…"
-asks for a name and switches to a new session. The session names stay hidden
-until you open that list, so a screen share of the palette shows no session
-names.
+none of the workspaces or agents of your other sessions. The Sessions
+group lists every session, with a status dot for each running one.
+Enter switches the current window to that session. "New session…"
+asks for a name and switches to a new session.
 
 Herdr cannot move a client to another session, so start Herdr through
 the palette's wrapper:

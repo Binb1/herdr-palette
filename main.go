@@ -27,7 +27,7 @@ const (
 	secSessions = "Sessions"
 )
 
-var sectionOrder = map[string]int{secJump: 0, secActions: 1, secHerdr: 2, secSessions: 3}
+var sectionOrder = map[string]int{secJump: 0, secSessions: 1, secActions: 2, secHerdr: 3}
 
 type item struct {
 	section    string
@@ -38,7 +38,6 @@ type item struct {
 	renameArgs []string // if set, ask for a name first and append it to these
 	session    string   // if set, switch to this Herdr session
 	newSession bool     // ask for a name, then switch to that session
-	query      string   // if set, replace the query with this (stay open)
 }
 
 type snapshot struct {
@@ -180,10 +179,6 @@ func loadItems() []item {
 		items = append(items, item{section: secHerdr, title: "Phone mode",
 			selfArgs: []string{"phone", "on"}})
 	}
-	items = append(items,
-		item{section: secHerdr, title: "Switch session…", query: "@"},
-		item{section: secHerdr, title: "New session…", newSession: true},
-	)
 	return append(items, sessionItems()...)
 }
 
@@ -239,8 +234,7 @@ func (t titles) Len() int            { return len(t) }
 
 func (m *model) filter() {
 	// A leading ">" restricts the search to commands (Actions + Herdr),
-	// like the VS Code palette. A leading "@" lists Herdr sessions, which
-	// stay hidden otherwise so a screen share does not show their names.
+	// like the VS Code palette. A leading "@" restricts it to sessions.
 	q := m.query
 	commandsOnly := strings.HasPrefix(q, ">")
 	sessionsOnly := strings.HasPrefix(q, "@")
@@ -258,7 +252,8 @@ func (m *model) filter() {
 	kept := m.matches[:0]
 	for _, match := range m.matches {
 		sec := m.items[match.Index].section
-		if (sec == secSessions) == sessionsOnly && !(commandsOnly && sec == secJump) {
+		jump := sec == secJump || sec == secSessions
+		if (!sessionsOnly || sec == secSessions) && !(commandsOnly && jump) {
 			kept = append(kept, match)
 		}
 	}
@@ -327,11 +322,6 @@ func (m model) switchTo(name string) (tea.Model, tea.Cmd) {
 func (m model) choose(it item) (tea.Model, tea.Cmd) {
 	if it.renameArgs != nil {
 		m.renameBase = it.renameArgs
-		return m, nil
-	}
-	if it.query != "" {
-		m.query = it.query
-		m.filter()
 		return m, nil
 	}
 	if it.newSession {
