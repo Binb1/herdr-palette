@@ -17,6 +17,8 @@ The palette shows three groups:
 3. **Herdr** — built-in commands: new workspace, new tab, rename
    workspace, rename tab, reload config, phone mode.
 
+Type `@` to list Herdr sessions instead. See [Sessions](#sessions).
+
 ## Requirements
 
 - Herdr 0.8.0 or later.
@@ -88,6 +90,7 @@ Local workspaces only.
 |---|---|
 | type | Filter the list (fuzzy match) |
 | `>` | Filter commands only (Actions and Herdr groups) |
+| `@` | List Herdr sessions (see [Sessions](#sessions)) |
 | `↑` `↓` | Move the selection |
 | `Enter` | Run the selected entry |
 | `Esc` | Close the palette |
@@ -105,6 +108,42 @@ Each Jump entry shows the agent status as a colored dot:
 - ⚪ `idle` — no active task
 
 (The palette renders small colored dots, not emoji.)
+
+## Sessions
+
+Named Herdr sessions keep contexts apart: a session for a client shows
+none of the workspaces or agents of your other sessions. Type `@` in
+the palette to list every session, with a status dot for each running
+one. Enter switches the current window to that session. "New session…"
+asks for a name and switches to a new session. The list stays hidden
+until you type `@`, so a screen share of the palette shows no session
+names.
+
+Herdr cannot move a client to another session, so start Herdr through
+the palette's wrapper:
+
+```sh
+"$PLUGIN_ROOT/bin/herdr-palette" attach work   # instead of: herdr --session work
+```
+
+`PLUGIN_ROOT` is the `plugin_root` that `herdr plugin list --json`
+prints. A shell function keeps it short:
+
+```sh
+h() { /path/to/plugin/bin/herdr-palette attach "${1:-default}" }
+```
+
+The wrapper runs the Herdr client in a loop. To switch, the palette
+detaches the client (the session keeps running) and the wrapper
+attaches to the target. A plain detach (`prefix+q`) still returns to
+the shell.
+
+Notes:
+
+- A client started with plain `herdr` cannot switch. The palette says
+  so in its footer.
+- When two windows show the same session, both switch.
+- Stopped sessions are listed too. Switching to one starts it.
 
 ## Phone mode
 

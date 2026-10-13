@@ -21,12 +21,13 @@ import (
 // ---- data ----
 
 const (
-	secJump    = "Jump"
-	secActions = "Actions"
-	secHerdr   = "Herdr"
+	secJump     = "Jump"
+	secActions  = "Actions"
+	secHerdr    = "Herdr"
+	secSessions = "Sessions"
 )
 
-var sectionOrder = map[string]int{secJump: 0, secActions: 1, secHerdr: 2}
+var sectionOrder = map[string]int{secJump: 0, secActions: 1, secHerdr: 2, secSessions: 3}
 
 type item struct {
 	section    string
@@ -35,6 +36,8 @@ type item struct {
 	args       []string // herdr arguments to run on Enter
 	selfArgs   []string // if set, run this binary with these arguments instead
 	renameArgs []string // if set, ask for a name first and append it to these
+	session    string   // if set, switch to this Herdr session
+	newSession bool     // ask for a name, then switch to that session
 }
 
 type snapshot struct {
@@ -176,7 +179,7 @@ func loadItems() []item {
 		items = append(items, item{section: secHerdr, title: "Phone mode",
 			selfArgs: []string{"phone", "on"}})
 	}
-	return items
+	return append(items, sessionItems()...)
 }
 
 // ---- theme ----
@@ -213,7 +216,9 @@ type model struct {
 	width      int
 	height     int
 	renameBase []string // non-nil while asking for a name
+	naming     bool     // asking for a new session name
 	newName    string
+	err        string // shown in the footer after a failed switch
 }
 
 func newModel() model {
@@ -229,10 +234,12 @@ func (t titles) Len() int            { return len(t) }
 
 func (m *model) filter() {
 	// A leading ">" restricts the search to commands (Actions + Herdr),
-	// like the VS Code palette.
+	// like the VS Code palette. A leading "@" lists Herdr sessions, which
+	// stay hidden otherwise so a screen share does not show their names.
 	q := m.query
 	commandsOnly := strings.HasPrefix(q, ">")
-	if commandsOnly {
+	sessionsOnly := strings.HasPrefix(q, "@")
+	if commandsOnly || sessionsOnly {
 		q = strings.TrimSpace(q[1:])
 	}
 	m.matches = nil
@@ -243,15 +250,14 @@ func (m *model) filter() {
 	} else {
 		m.matches = fuzzy.FindFrom(q, titles(m.items))
 	}
-	if commandsOnly {
-		kept := m.matches[:0]
-		for _, match := range m.matches {
-			if m.items[match.Index].section != secJump {
-				kept = append(kept, match)
-			}
+	kept := m.matches[:0]
+	for _, match := range m.matches {
+		sec := m.items[match.Index].section
+		if (sec == secSessions) == sessionsOnly && !(commandsOnly && sec == secJump) {
+			kept = append(kept, match)
 		}
-		m.matches = kept
 	}
+	m.matches = kept
 	sort.SliceStable(m.matches, func(a, b int) bool {
 		sa := sectionOrder[m.items[m.matches[a].Index].section]
 		sb := sectionOrder[m.items[m.matches[b].Index].section]
@@ -302,11 +308,28 @@ func (m model) runBin(bin string, args []string) tea.Cmd {
 	return tea.Quit
 }
 
-// choose activates an entry: enter rename mode, run this binary, or run herdr.
+// switchTo moves the client to another session, or shows why it cannot.
+func (m model) switchTo(name string) (tea.Model, tea.Cmd) {
+	if err := switchSession(name); err != nil {
+		m.err = err.Error()
+		return m, nil
+	}
+	return m, tea.Quit
+}
+
+// choose activates an entry: enter rename mode, switch session, run this
+// binary, or run herdr.
 func (m model) choose(it item) (tea.Model, tea.Cmd) {
 	if it.renameArgs != nil {
 		m.renameBase = it.renameArgs
 		return m, nil
+	}
+	if it.newSession {
+		m.naming = true
+		return m, nil
+	}
+	if it.session != "" {
+		return m.switchTo(it.session)
 	}
 	if it.selfArgs != nil {
 		self, err := os.Executable()
@@ -327,7 +350,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		return m.updateMouse(msg)
 	case tea.KeyMsg:
-		if m.renameBase != nil {
+		if m.renameBase != nil || m.naming {
 			return m.updateRename(msg)
 		}
 		switch msg.String() {
@@ -360,11 +383,15 @@ func (m model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
 		m.renameBase = nil
+		m.naming = false
 		m.newName = ""
 	case "ctrl+c":
 		return m, tea.Quit
 	case "enter":
 		if name := strings.TrimSpace(m.newName); name != "" {
+			if m.naming {
+				return m.switchTo(name)
+			}
 			return m, m.run(append(m.renameBase, name))
 		}
 	case "backspace":
@@ -446,10 +473,12 @@ func (m model) View() string {
 
 	var b strings.Builder
 
-	if m.renameBase != nil {
+	if m.naming {
+		b.WriteString(accSt.Render("New session: ") + textSt.Render(m.newName) + accSt.Render("▌"))
+	} else if m.renameBase != nil {
 		b.WriteString(accSt.Render("Rename to: ") + textSt.Render(m.newName) + accSt.Render("▌"))
 	} else if m.query == "" {
-		b.WriteString(accSt.Render("▌") + dimSt.Render(" search · > commands"))
+		b.WriteString(accSt.Render("▌") + dimSt.Render(" search · > commands · @ sessions"))
 	} else {
 		b.WriteString(textSt.Render(m.query) + accSt.Render("▌"))
 	}
@@ -494,8 +523,12 @@ func (m model) View() string {
 		b.WriteString("\n")
 	}
 
-	hints := "↑↓ move · ↵ run · esc"
-	b.WriteString(strings.Repeat(" ", max(1, w-len([]rune(hints)))) + dimSt.Render(hints))
+	if m.err != "" {
+		b.WriteString(" " + lipgloss.NewStyle().Foreground(th.status["blocked"]).Render(m.err))
+	} else {
+		hints := "↑↓ move · ↵ run · esc"
+		b.WriteString(strings.Repeat(" ", max(1, w-len([]rune(hints)))) + dimSt.Render(hints))
+	}
 
 	// Indent every line by one column so text clears Herdr's border.
 	return " " + strings.ReplaceAll(b.String(), "\n", "\n ")
@@ -525,6 +558,14 @@ func main() {
 			mode = os.Args[2]
 		}
 		phoneMain(mode)
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "attach" {
+		name := "default"
+		if len(os.Args) > 2 {
+			name = os.Args[2]
+		}
+		attachMain(name)
 		return
 	}
 	p := tea.NewProgram(newModel(), tea.WithAltScreen(), tea.WithMouseCellMotion())
