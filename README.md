@@ -15,9 +15,11 @@ The palette shows three groups:
 2. **Actions** — actions from all installed Herdr plugins.
    Enter invokes the action.
 3. **Herdr** — built-in commands: new workspace, new tab, rename
-   workspace, rename tab, reload config, phone mode.
+   workspace, rename tab, reload config, phone mode, switch session,
+   new session.
 
-Type `@` to list Herdr sessions instead. See [Sessions](#sessions).
+"Switch session…" (or typing `@`) lists Herdr sessions. See
+[Sessions](#sessions).
 
 ## Requirements
 
@@ -112,11 +114,11 @@ Each Jump entry shows the agent status as a colored dot:
 ## Sessions
 
 Named Herdr sessions keep contexts apart: a session for a client shows
-none of the workspaces or agents of your other sessions. Type `@` in
-the palette to list every session, with a status dot for each running
+none of the workspaces or agents of your other sessions. Run "Switch
+session…" or type `@` in the palette to list every session, with a status dot for each running
 one. Enter switches the current window to that session. "New session…"
-asks for a name and switches to a new session. The list stays hidden
-until you type `@`, so a screen share of the palette shows no session
+asks for a name and switches to a new session. The session names stay hidden
+until you open that list, so a screen share of the palette shows no session
 names.
 
 Herdr cannot move a client to another session, so start Herdr through

@@ -38,6 +38,7 @@ type item struct {
 	renameArgs []string // if set, ask for a name first and append it to these
 	session    string   // if set, switch to this Herdr session
 	newSession bool     // ask for a name, then switch to that session
+	query      string   // if set, replace the query with this (stay open)
 }
 
 type snapshot struct {
@@ -179,6 +180,10 @@ func loadItems() []item {
 		items = append(items, item{section: secHerdr, title: "Phone mode",
 			selfArgs: []string{"phone", "on"}})
 	}
+	items = append(items,
+		item{section: secHerdr, title: "Switch session…", query: "@"},
+		item{section: secHerdr, title: "New session…", newSession: true},
+	)
 	return append(items, sessionItems()...)
 }
 
@@ -322,6 +327,11 @@ func (m model) switchTo(name string) (tea.Model, tea.Cmd) {
 func (m model) choose(it item) (tea.Model, tea.Cmd) {
 	if it.renameArgs != nil {
 		m.renameBase = it.renameArgs
+		return m, nil
+	}
+	if it.query != "" {
+		m.query = it.query
+		m.filter()
 		return m, nil
 	}
 	if it.newSession {
