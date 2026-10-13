@@ -131,6 +131,19 @@ prints. A shell function keeps it short:
 h() { /path/to/plugin/bin/herdr-palette attach "${1:-default}" }
 ```
 
+To route plain `herdr` and `herdr --session X` through the wrapper
+too, so every window can switch, add this zsh function as well:
+
+```sh
+herdr() {
+  if (( $# == 0 )); then h default
+  elif [[ $1 == --session && $# == 2 ]]; then h "$2"
+  elif [[ $1 == session && $2 == attach && $# == 3 ]]; then h "$3"
+  else command herdr "$@"
+  fi
+}
+```
+
 The wrapper runs the Herdr client in a loop. To switch, the palette
 detaches the client (the session keeps running) and the wrapper
 attaches to the target. A plain detach (`prefix+q`) still returns to
