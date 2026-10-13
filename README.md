@@ -9,8 +9,8 @@ popup pane. Type to filter. Press Enter to run. 🐑
 
 The palette shows four groups:
 
-1. **Sessions** — Herdr sessions, with live status dots. Enter
-   switches the window to that session. See [Sessions](#sessions).
+1. **Sessions** — Herdr sessions; an orange dot marks the current
+   one. Enter switches the window to that session. See [Sessions](#sessions).
 2. **Actions** — actions from all installed Herdr plugins.
    Enter invokes the action.
 3. **Herdr** — built-in commands: new workspace, new tab, rename
@@ -103,6 +103,14 @@ Local workspaces only.
 The mouse also works. Click an entry to run it. Scroll to move the
 selection.
 
+## Theme
+
+The palette reads the Herdr theme from `~/.config/herdr/config.toml`:
+Catppuccin Mocha for dark and Latte for light, plus the color overrides
+in `[theme.custom]`, `[theme.custom.dark]` and `[theme.custom.light]`
+(`text`, `overlay0`, `mauve`, `peach`, `red`, `green`, `accent`). Other
+base themes fall back to Catppuccin.
+
 ## Status dots
 
 Each Jump entry shows the agent status as a colored dot:
@@ -118,11 +126,11 @@ Each Jump entry shows the agent status as a colored dot:
 
 Named Herdr sessions keep contexts apart: a session for a client shows
 none of the workspaces or agents of your other sessions. The Sessions
-group lists every session, with a status dot for each running one.
+group lists every session; an orange dot marks the current one.
 Enter switches the current window to that session. "New session…"
 asks for a name and switches to a new session. "Kill current session" stops
-the session you are in, with all its panes, after a second Enter;
-the window returns to the shell.
+and deletes the session you are in, with all its panes, after a second
+Enter; the window returns to the shell. (`default` is only stopped.)
 
 Herdr cannot move a client to another session, so start Herdr through
 the palette's wrapper:

@@ -7,7 +7,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -82,29 +81,6 @@ func currentSession(list sessionList) string {
 	return "default"
 }
 
-// sessionStatus sums up the agents of a running session as one dot:
-// blocked wins over working, working over done, done over idle.
-func sessionStatus(socket string) string {
-	c := exec.Command(herdrBin(), "api", "snapshot")
-	c.Env = append(os.Environ(), "HERDR_SOCKET_PATH="+socket)
-	out, err := c.Output()
-	if err != nil {
-		return ""
-	}
-	var snap snapshot
-	if json.Unmarshal(out, &snap) != nil {
-		return ""
-	}
-	rank := map[string]int{"idle": 1, "done": 2, "working": 3, "blocked": 4}
-	best := ""
-	for _, a := range snap.Result.Snapshot.Agents {
-		if rank[a.AgentStatus] > rank[best] {
-			best = a.AgentStatus
-		}
-	}
-	return best
-}
-
 // sessionItems lists every session, current one first.
 func sessionItems() []item {
 	var list sessionList
@@ -112,15 +88,13 @@ func sessionItems() []item {
 		return nil
 	}
 	cur := currentSession(list)
-	items := []item{{section: secSessions, title: cur + " · current", session: cur}}
+	items := []item{{section: secSessions, title: cur, dot: "current", session: cur}}
 	for _, s := range list.Sessions {
 		if s.Name == cur {
 			continue
 		}
 		it := item{section: secSessions, title: s.Name, session: s.Name}
-		if s.Running {
-			it.dot = sessionStatus(s.SocketPath)
-		} else {
+		if !s.Running {
 			it.title += " · stopped"
 		}
 		items = append(items, it)

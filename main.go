@@ -188,19 +188,11 @@ func loadItems() []item {
 
 type theme struct {
 	text, dim, header, accent lipgloss.AdaptiveColor
-	status                    map[string]lipgloss.Color
+	status                    map[string]lipgloss.AdaptiveColor
 }
 
-// Catppuccin Mocha (dark) / Latte (light). Status dots match Robin's SwiftBar plugin.
-var th = theme{
-	text:   lipgloss.AdaptiveColor{Dark: "#CDD6F4", Light: "#4C4F69"},
-	dim:    lipgloss.AdaptiveColor{Dark: "#6C7086", Light: "#8C8FA1"},
-	header: lipgloss.AdaptiveColor{Dark: "#CBA6F7", Light: "#8839EF"},
-	accent: lipgloss.AdaptiveColor{Dark: "#F8BC82", Light: "#FE640B"},
-	status: map[string]lipgloss.Color{
-		"working": "#E8A33D", "blocked": "#E35D6A", "done": "#5BB974", "idle": "#98989D",
-	},
-}
+// th follows the Herdr theme; see theme.go.
+var th = loadTheme()
 
 // ---- model ----
 
@@ -362,12 +354,14 @@ func (m model) choose(it item) (tea.Model, tea.Cmd) {
 	if it.kill != "" {
 		if m.confirm != it.kill {
 			m.confirm = it.kill
-			m.err = "Enter again to stop " + it.kill + " and all its panes"
+			m.err = "Enter again to kill " + it.kill + " and all its panes"
 			return m, nil
 		}
 		// Stopping this session also ends the palette, so detach the
 		// command from its process group.
-		c := exec.Command(herdrBin(), "session", "stop", it.kill)
+		// "default" cannot be deleted; other sessions go away entirely.
+		script := `"$0" session stop "$1" && [ "$1" != default ] && "$0" session delete "$1"`
+		c := exec.Command("sh", "-c", script, herdrBin(), it.kill)
 		c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 		c.Start()
 		return m, tea.Quit
