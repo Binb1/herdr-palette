@@ -390,7 +390,8 @@ func (m model) updateRename(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if name := strings.TrimSpace(m.newName); name != "" {
 			if m.naming {
-				return m.switchTo(name)
+				// Session names become directory names: no spaces.
+				return m.switchTo(strings.Join(strings.Fields(name), "-"))
 			}
 			return m, m.run(append(m.renameBase, name))
 		}
@@ -485,6 +486,9 @@ func (m model) View() string {
 	b.WriteString("\n")
 
 	rows := m.rows()
+	if m.naming {
+		rows = nil // the name prompt has no list
+	}
 	end := m.scroll + m.listHeight()
 	if end > len(rows) {
 		end = len(rows)
@@ -515,7 +519,7 @@ func (m model) View() string {
 		line += highlight(it.title, match.MatchedIndexes, textSt, accSt.Bold(true))
 		b.WriteString(line + "\n")
 	}
-	if len(m.matches) == 0 {
+	if len(m.matches) == 0 && !m.naming {
 		b.WriteString(dimSt.Render("  no matches") + "\n")
 		lines++
 	}
