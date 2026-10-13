@@ -18,13 +18,14 @@ title = "Toggle phone mode"
 contexts = ["global"]
 command = ["sh", "-c", "exec \"$HERDR_PLUGIN_ROOT/bin/herdr-palette\" phone toggle"]
 
-# Match the palette by its exact command line: "herdr-palette attach"
-# wrappers share the process name and must not count as an open palette.
+# The palette writes its pid to palette.pid while open. The toggle
+# closes it when that pid is a live herdr-palette (no process scan),
+# and opens the palette otherwise.
 [[actions]]
 id = "open"
 title = "Toggle command palette"
 contexts = ["global"]
-command = ["sh", "-c", "p=\"$HERDR_PLUGIN_ROOT/bin/herdr-palette\"; if pgrep -xf \"$p\" >/dev/null; then pkill -xf \"$p\"; else exec \"$HERDR_BIN_PATH\" plugin pane open --plugin binb1.palette --entrypoint palette; fi"]
+command = ["sh", "-c", "f=\"$HOME/.local/state/herdr-palette/palette.pid\"; p=$(cat \"$f\" 2>/dev/null); if [ -n \"$p\" ] && [ \"$(ps -o comm= -p \"$p\" 2>/dev/null | xargs basename 2>/dev/null)\" = herdr-palette ]; then kill \"$p\"; rm -f \"$f\"; else exec \"$HERDR_BIN_PATH\" plugin pane open --plugin binb1.palette --entrypoint palette; fi"]
 
 # Auto phone mode: a narrow client (a phone over mosh) shrinks the
 # layout; the hook flattens splits into tabs and restores them when the
