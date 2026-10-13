@@ -9,15 +9,20 @@ popup pane. Type to filter. Press Enter to run. 🐑
 
 The palette shows four groups:
 
-1. **Jump** — Herdr workspaces and agents, with live status dots.
+1. **Sessions** — Herdr sessions, with live status dots. Enter
+   switches the window to that session. See [Sessions](#sessions).
+2. **Actions** — actions from all installed Herdr plugins.
+   Enter invokes the action.
+3. **Herdr** — built-in commands: new workspace, new tab, rename
+   workspace, rename tab, reload config, phone mode.
+4. **Jump** — Herdr workspaces and agents, with live status dots.
    Enter focuses the selection. When an agent waits for input, the
    group starts with a "Next blocked agent" entry.
-2. **Sessions** — Herdr sessions, with live status dots. Enter
-   switches the window to that session. See [Sessions](#sessions).
-3. **Actions** — actions from all installed Herdr plugins.
-   Enter invokes the action.
-4. **Herdr** — built-in commands: new workspace, new tab, rename
-   workspace, rename tab, reload config, phone mode.
+
+Typed text also becomes a name: typing `Upvotecast` offers
+`Rename workspace "Upvotecast"`, `Rename tab "Upvotecast"`,
+`New workspace "Upvotecast"`, `New tab "Upvotecast"` and
+`New session "Upvotecast"`, below the regular matches.
 
 ## Requirements
 

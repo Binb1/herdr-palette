@@ -27,7 +27,7 @@ const (
 	secSessions = "Sessions"
 )
 
-var sectionOrder = map[string]int{secJump: 0, secSessions: 1, secActions: 2, secHerdr: 3}
+var sectionOrder = map[string]int{secSessions: 0, secActions: 1, secHerdr: 2, secJump: 3}
 
 type item struct {
 	section    string
@@ -208,7 +208,8 @@ type row struct {
 }
 
 type model struct {
-	items      []item
+	base       []item // loaded entries
+	items      []item // base plus suggestions built from the query
 	query      string
 	matches    []fuzzy.Match // over titles of items, grouped by section
 	cursor     int           // index into matches
@@ -222,7 +223,7 @@ type model struct {
 }
 
 func newModel() model {
-	m := model{items: loadItems(), width: 80, height: 20}
+	m := model{base: loadItems(), width: 80, height: 20}
 	m.filter()
 	return m
 }
@@ -241,13 +242,23 @@ func (m *model) filter() {
 	if commandsOnly || sessionsOnly {
 		q = strings.TrimSpace(q[1:])
 	}
+	m.items = m.base
+	var extra []item
+	if q != "" && !sessionsOnly {
+		extra = m.suggestions(q)
+		m.items = append(m.base[:len(m.base):len(m.base)], extra...)
+	}
 	m.matches = nil
 	if q == "" {
-		for i := range m.items {
+		for i := range m.base {
 			m.matches = append(m.matches, fuzzy.Match{Index: i})
 		}
 	} else {
-		m.matches = fuzzy.FindFrom(q, titles(m.items))
+		m.matches = fuzzy.FindFrom(q, titles(m.base))
+	}
+	// Suggestions always show, below the real matches of their group.
+	for i := range extra {
+		m.matches = append(m.matches, fuzzy.Match{Index: len(m.base) + i, Score: -1})
 	}
 	kept := m.matches[:0]
 	for _, match := range m.matches {
@@ -268,6 +279,27 @@ func (m *model) filter() {
 	})
 	m.cursor = 0
 	m.scroll = 0
+}
+
+// suggestions turns the query into commands that take it as a name:
+// rename the workspace or tab, or create a workspace, tab or session.
+func (m model) suggestions(q string) []item {
+	quoted := " \"" + q + "\""
+	var out []item
+	for _, it := range m.base {
+		if it.renameArgs != nil {
+			out = append(out, item{section: secHerdr, title: it.title + quoted,
+				args: append(append([]string{}, it.renameArgs...), q)})
+		}
+	}
+	return append(out,
+		item{section: secHerdr, title: "New workspace" + quoted,
+			args: []string{"workspace", "create", "--label", q}},
+		item{section: secHerdr, title: "New tab" + quoted,
+			args: []string{"tab", "create", "--label", q}},
+		item{section: secHerdr, title: "New session" + quoted,
+			session: strings.Join(strings.Fields(q), "-")},
+	)
 }
 
 // rows lays out headers and items in display order.
