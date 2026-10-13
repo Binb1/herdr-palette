@@ -7,15 +7,22 @@ popup pane. Type to filter. Press Enter to run. 🐑
 
 ![Palette demo](demo.gif)
 
-The palette shows three groups:
+The palette shows four groups:
 
-1. **Jump** — Herdr workspaces and agents, with live status dots.
-   Enter focuses the selection. When an agent waits for input, the
-   group starts with a "Next blocked agent" entry.
+1. **Sessions** — Herdr sessions; an orange dot marks the current
+   one. Enter switches the window to that session. See [Sessions](#sessions).
 2. **Actions** — actions from all installed Herdr plugins.
    Enter invokes the action.
 3. **Herdr** — built-in commands: new workspace, new tab, rename
    workspace, rename tab, reload config, phone mode.
+4. **Jump** — Herdr workspaces and agents, with live status dots.
+   Enter focuses the selection. When an agent waits for input, the
+   group starts with a "Next blocked agent" entry.
+
+Typed text also becomes a name: typing `Upvotecast` offers
+`Rename workspace "Upvotecast"`, `Rename tab "Upvotecast"`,
+`New workspace "Upvotecast"`, `New tab "Upvotecast"` and
+`New session "Upvotecast"`, below the regular matches.
 
 ## Requirements
 
@@ -88,12 +95,21 @@ Local workspaces only.
 |---|---|
 | type | Filter the list (fuzzy match) |
 | `>` | Filter commands only (Actions and Herdr groups) |
+| `@` | Filter sessions only |
 | `↑` `↓` | Move the selection |
 | `Enter` | Run the selected entry |
 | `Esc` | Close the palette |
 
 The mouse also works. Click an entry to run it. Scroll to move the
 selection.
+
+## Theme
+
+The palette reads the Herdr theme from `~/.config/herdr/config.toml`:
+Catppuccin Mocha for dark and Latte for light, plus the color overrides
+in `[theme.custom]`, `[theme.custom.dark]` and `[theme.custom.light]`
+(`text`, `overlay0`, `mauve`, `peach`, `red`, `green`, `accent`). Other
+base themes fall back to Catppuccin.
 
 ## Status dots
 
@@ -105,6 +121,55 @@ Each Jump entry shows the agent status as a colored dot:
 - ⚪ `idle` — no active task
 
 (The palette renders small colored dots, not emoji.)
+
+## Sessions
+
+Named Herdr sessions keep contexts apart: a session for a client shows
+none of the workspaces or agents of your other sessions. The Sessions
+group lists every session; an orange dot marks the current one.
+Enter switches the current window to that session. "New session…"
+asks for a name and switches to a new session. "Kill current session" stops
+and deletes the session you are in, with all its panes, after a second
+Enter; the window returns to the shell. (`default` is only stopped.)
+
+Herdr cannot move a client to another session, so start Herdr through
+the palette's wrapper:
+
+```sh
+"$PLUGIN_ROOT/bin/herdr-palette" attach work   # instead of: herdr --session work
+```
+
+`PLUGIN_ROOT` is the `plugin_root` that `herdr plugin list --json`
+prints. A shell function keeps it short:
+
+```sh
+h() { /path/to/plugin/bin/herdr-palette attach "${1:-default}" }
+```
+
+To route plain `herdr` and `herdr --session X` through the wrapper
+too, so every window can switch, add this zsh function as well:
+
+```sh
+herdr() {
+  if (( $# == 0 )); then h default
+  elif [[ $1 == --session && $# == 2 ]]; then h "$2"
+  elif [[ $1 == session && $2 == attach && $# == 3 ]]; then h "$3"
+  else command herdr "$@"
+  fi
+}
+```
+
+The wrapper runs the Herdr client in a loop. To switch, the palette
+detaches the client (the session keeps running) and the wrapper
+attaches to the target. A plain detach (`prefix+q`) still returns to
+the shell.
+
+Notes:
+
+- A client started with plain `herdr` cannot switch. The palette says
+  so in its footer.
+- When two windows show the same session, both switch.
+- Stopped sessions are listed too. Switching to one starts it.
 
 ## Phone mode
 
