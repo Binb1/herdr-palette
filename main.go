@@ -9,9 +9,13 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"syscall"
+	"time"
 	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -106,8 +110,21 @@ func loadItems() []item {
 	var items []item
 	focusedWs, focusedTab := "", ""
 
-	var snap snapshot
-	if herdrJSON(&snap, "api", "snapshot") == nil {
+	// The three herdr calls are independent; run them side by side.
+	var (
+		snap             snapshot
+		acts             actionList
+		sessions         []item
+		snapErr, actsErr error
+		wg               sync.WaitGroup
+	)
+	wg.Add(3)
+	go func() { defer wg.Done(); snapErr = herdrJSON(&snap, "api", "snapshot") }()
+	go func() { defer wg.Done(); actsErr = herdrJSON(&acts, "plugin", "action", "list") }()
+	go func() { defer wg.Done(); sessions = sessionItems() }()
+	wg.Wait()
+
+	if snapErr == nil {
 		s := snap.Result.Snapshot
 		focusedWs = s.FocusedWorkspaceID
 		focusedTab = s.FocusedTabID
@@ -148,8 +165,7 @@ func loadItems() []item {
 		}
 	}
 
-	var acts actionList
-	if herdrJSON(&acts, "plugin", "action", "list") == nil {
+	if actsErr == nil {
 		for _, a := range acts.Result.Actions {
 			if a.PluginID == "binb1.palette" {
 				continue
@@ -181,7 +197,25 @@ func loadItems() []item {
 		items = append(items, item{section: secHerdr, title: "Phone mode",
 			selfArgs: []string{"phone", "on"}})
 	}
-	return append(items, sessionItems()...)
+	return append(items, sessions...)
+}
+
+// loadStatus maps "workspace focus <id>" and "agent focus <pane>" item
+// arguments to the live agent status, for the refresh while open.
+func loadStatus() map[string]string {
+	var snap snapshot
+	if herdrJSON(&snap, "api", "snapshot") != nil {
+		return nil
+	}
+	s := snap.Result.Snapshot
+	out := map[string]string{}
+	for _, w := range s.Workspaces {
+		out["workspace focus "+w.WorkspaceID] = w.AgentStatus
+	}
+	for _, a := range s.Agents {
+		out["agent focus "+a.PaneID] = a.AgentStatus
+	}
+	return out
 }
 
 // ---- theme ----
@@ -215,6 +249,46 @@ type model struct {
 	newName    string
 	err        string // shown in the footer after a failed switch
 	confirm    string // session awaiting a second Enter to be stopped
+	frame      int    // animation frame, advanced by tick
+	typedAt    int    // frame of the last key, keeps the cursor solid
+}
+
+// ---- animation ----
+
+// One tick drives every animation: the working spinner, the blocked
+// pulse and the cursor blink. Every second it also refreshes statuses.
+const tickEvery = 100 * time.Millisecond
+
+type tickMsg struct{}
+type statusMsg map[string]string
+
+func tick() tea.Cmd {
+	return tea.Tick(tickEvery, func(time.Time) tea.Msg { return tickMsg{} })
+}
+
+func refreshStatus() tea.Msg { return statusMsg(loadStatus()) }
+
+var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// glyph is the status mark for a dot at the current frame.
+func (m model) glyph(dot string) string {
+	switch dot {
+	case "working":
+		return spinner[m.frame%len(spinner)]
+	case "blocked":
+		if m.frame/4%2 == 1 {
+			return "○"
+		}
+	}
+	return "●"
+}
+
+// caret blinks, but stays solid for half a second after a key.
+func (m model) caret() string {
+	if (m.frame-m.typedAt)/5%2 == 1 {
+		return " "
+	}
+	return "▌"
 }
 
 func newModel() model {
@@ -383,15 +457,30 @@ func (m model) choose(it item) (tea.Model, tea.Cmd) {
 	return m, m.run(it.args)
 }
 
-func (m model) Init() tea.Cmd { return nil }
+func (m model) Init() tea.Cmd { return tick() }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tickMsg:
+		m.frame++
+		if m.frame%10 == 0 {
+			return m, tea.Batch(tick(), refreshStatus)
+		}
+		return m, tick()
+	case statusMsg:
+		for _, list := range [][]item{m.base, m.items} {
+			for i := range list {
+				if st, ok := msg[strings.Join(list[i].args, " ")]; ok && list[i].dot != "current" {
+					list[i].dot = st
+				}
+			}
+		}
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case tea.MouseMsg:
 		return m.updateMouse(msg)
 	case tea.KeyMsg:
+		m.typedAt = m.frame
 		if m.renameBase != nil || m.naming {
 			return m.updateRename(msg)
 		}
@@ -520,13 +609,13 @@ func (m model) View() string {
 	var b strings.Builder
 
 	if m.naming {
-		b.WriteString(accSt.Render("New session: ") + textSt.Render(m.newName) + accSt.Render("▌"))
+		b.WriteString(accSt.Render("New session: ") + textSt.Render(m.newName) + accSt.Render(m.caret()))
 	} else if m.renameBase != nil {
-		b.WriteString(accSt.Render("Rename to: ") + textSt.Render(m.newName) + accSt.Render("▌"))
+		b.WriteString(accSt.Render("Rename to: ") + textSt.Render(m.newName) + accSt.Render(m.caret()))
 	} else if m.query == "" {
-		b.WriteString(accSt.Render("▌") + dimSt.Render(" search · > commands · @ sessions"))
+		b.WriteString(accSt.Render(m.caret()) + dimSt.Render(" search · > commands · @ sessions"))
 	} else {
-		b.WriteString(textSt.Render(m.query) + accSt.Render("▌"))
+		b.WriteString(textSt.Render(m.query) + accSt.Render(m.caret()))
 	}
 	b.WriteString("\n")
 
@@ -557,7 +646,7 @@ func (m model) View() string {
 			if !ok {
 				c = th.status["idle"]
 			}
-			line += lipgloss.NewStyle().Foreground(c).Render("●") + " "
+			line += lipgloss.NewStyle().Foreground(c).Render(m.glyph(it.dot)) + " "
 		} else {
 			line += "  "
 		}
@@ -617,9 +706,21 @@ func main() {
 		attachMain(name)
 		return
 	}
+	// The toggle action reads this file to close an open palette.
+	pid := pidFile()
+	os.WriteFile(pid, []byte(strconv.Itoa(os.Getpid())), 0o644)
 	p := tea.NewProgram(newModel(), tea.WithAltScreen(), tea.WithMouseCellMotion())
-	if _, err := p.Run(); err != nil {
+	_, err := p.Run()
+	os.Remove(pid)
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func pidFile() string {
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".local", "state", "herdr-palette")
+	os.MkdirAll(dir, 0o755)
+	return filepath.Join(dir, "palette.pid")
 }

@@ -115,12 +115,13 @@ base themes fall back to Catppuccin.
 
 Each Jump entry shows the agent status as a colored dot:
 
-- 🟠 `working` — the agent runs a task
-- 🔴 `blocked` — the agent waits for input
+- 🟠 `working` — the agent runs a task (an animated `⠋⠙⠹…` spinner)
+- 🔴 `blocked` — the agent waits for input (the dot pulses `●`/`○`)
 - 🟢 `done` — the agent finished
 - ⚪ `idle` — no active task
 
-(The palette renders small colored dots, not emoji.)
+(The palette renders small colored dots, not emoji.) The statuses
+refresh every second while the palette is open.
 
 ## Sessions
 
