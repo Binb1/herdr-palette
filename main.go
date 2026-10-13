@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"syscall"
 	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -38,6 +39,7 @@ type item struct {
 	renameArgs []string // if set, ask for a name first and append it to these
 	session    string   // if set, switch to this Herdr session
 	newSession bool     // ask for a name, then switch to that session
+	kill       string   // if set, stop this session after a second Enter
 }
 
 type snapshot struct {
@@ -220,6 +222,7 @@ type model struct {
 	naming     bool     // asking for a new session name
 	newName    string
 	err        string // shown in the footer after a failed switch
+	confirm    string // session awaiting a second Enter to be stopped
 }
 
 func newModel() model {
@@ -356,6 +359,19 @@ func (m model) choose(it item) (tea.Model, tea.Cmd) {
 		m.renameBase = it.renameArgs
 		return m, nil
 	}
+	if it.kill != "" {
+		if m.confirm != it.kill {
+			m.confirm = it.kill
+			m.err = "Enter again to stop " + it.kill + " and all its panes"
+			return m, nil
+		}
+		// Stopping this session also ends the palette, so detach the
+		// command from its process group.
+		c := exec.Command(herdrBin(), "session", "stop", it.kill)
+		c.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		c.Start()
+		return m, tea.Quit
+	}
 	if it.newSession {
 		m.naming = true
 		return m, nil
@@ -384,6 +400,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.renameBase != nil || m.naming {
 			return m.updateRename(msg)
+		}
+		if msg.String() != "enter" && m.confirm != "" {
+			m.confirm, m.err = "", ""
 		}
 		switch msg.String() {
 		case "esc", "ctrl+c":

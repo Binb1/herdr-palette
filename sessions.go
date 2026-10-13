@@ -125,7 +125,10 @@ func sessionItems() []item {
 		}
 		items = append(items, it)
 	}
-	return append(items, item{section: secSessions, title: "New session…", newSession: true})
+	return append(items,
+		item{section: secSessions, title: "New session…", newSession: true},
+		item{section: secSessions, title: "Kill current session (" + cur + ")", kill: cur},
+	)
 }
 
 // wrappedClients returns, for each "herdr-palette attach" wrapper whose

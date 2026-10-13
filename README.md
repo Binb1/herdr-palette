@@ -120,7 +120,9 @@ Named Herdr sessions keep contexts apart: a session for a client shows
 none of the workspaces or agents of your other sessions. The Sessions
 group lists every session, with a status dot for each running one.
 Enter switches the current window to that session. "New session…"
-asks for a name and switches to a new session.
+asks for a name and switches to a new session. "Kill current session" stops
+the session you are in, with all its panes, after a second Enter;
+the window returns to the shell.
 
 Herdr cannot move a client to another session, so start Herdr through
 the palette's wrapper:
