@@ -7,7 +7,7 @@ popup pane. Type to filter. Press Enter to run. 🐑
 
 ![Palette demo](demo.gif)
 
-The palette shows four groups:
+The palette shows five groups:
 
 1. **Sessions** — Herdr sessions; an orange dot marks the current
    one. Enter switches the window to that session. See [Sessions](#sessions).
@@ -15,9 +15,12 @@ The palette shows four groups:
    Enter invokes the action.
 3. **Herdr** — built-in commands: new workspace, new tab, rename
    workspace, rename tab, reload config, phone mode.
-4. **Jump** — Herdr workspaces and agents, with live status dots.
-   Enter focuses the selection. When an agent waits for input, the
-   group starts with a "Next blocked agent" entry.
+4. **Machines** — saved SSH machines (`herdr machine add`), with
+   their health. See [Machines](#machines).
+5. **Jump** — Herdr workspaces and agents, with live status dots,
+   on this machine and on every connected saved machine. Enter focuses
+   the selection. When an agent waits for input, the group starts with
+   a "Next blocked agent" entry.
 
 Typed text also becomes a name: typing `Upvotecast` offers
 `Rename workspace "Upvotecast"`, `Rename tab "Upvotecast"`,
@@ -171,6 +174,38 @@ Notes:
   so in its footer.
 - When two windows show the same session, both switch.
 - Stopped sessions are listed too. Switching to one starts it.
+
+## Machines
+
+Herdr 0.9 can keep saved SSH machines (`herdr machine add`) in one
+window, for example a Mac mini that runs agents. The palette shows
+those machines and their agents next to your local ones.
+
+| Feature | Supported | How |
+|---|---|---|
+| List saved machines | ✅ | Machines group, read from `herdr machine list --json` |
+| Machine health | ✅ | Dot from `herdr machine status --json`: 🟢 reachable, 🔴 `auth required` / `error` / no answer, ⚪ disabled |
+| Reconnect a machine | ✅ | Enter on a red machine opens a tab that runs `herdr machine reconnect <id>`, so you can type the SSH passphrase |
+| Enable / disable a machine | ✅ | Enter on a grey machine enables it; "Disable <machine>" disables it |
+| Go to a machine | ✅ | Enter on a green machine runs `herdr --machine <id> workspace focus` on its current workspace |
+| Remote workspaces and agents in Jump | ✅ | `herdr --machine <id> api snapshot`, rows labelled `mac-mini · 2. api` |
+| Focus a remote workspace or agent | ✅ | Enter runs `herdr --machine <id> workspace focus` / `agent focus` |
+| Next blocked agent across machines | ✅ | Points to a blocked remote agent when no local agent is blocked |
+| Live remote statuses | ✅ | Remote rows refresh every 5 seconds while the palette is open |
+| Remote plugin actions | ❌ | Not yet; the Actions group shows the local server's actions |
+| Remote sessions (switch, new, kill) | ❌ | Herdr does not forward `session` commands to saved machines |
+| Phone mode on a remote session | ➖ | Works when the palette is installed on the remote host (see [Remote servers and VMs](#remote-servers-and-vms)) |
+
+Remote state comes over SSH, so the palette opens with local state
+first and adds the remote rows when they arrive. Each machine gets a
+5 second timeout; a machine that does not answer shows a red dot and
+does not slow the palette down. Requires Herdr 0.9 or later on the
+client and on each saved machine.
+
+Note: the palette that opens depends on where the focused session
+lives. Viewing a saved machine's workspace, the keybinding runs the
+palette installed on that machine, which lists that machine's own
+saved machines (usually none).
 
 ## Phone mode
 

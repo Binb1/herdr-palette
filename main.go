@@ -30,9 +30,10 @@ const (
 	secActions  = "Actions"
 	secHerdr    = "Herdr"
 	secSessions = "Sessions"
+	secMachines = "Machines"
 )
 
-var sectionOrder = map[string]int{secSessions: 0, secActions: 1, secHerdr: 2, secJump: 3}
+var sectionOrder = map[string]int{secSessions: 0, secActions: 1, secHerdr: 2, secMachines: 3, secJump: 4}
 
 type item struct {
 	section    string
@@ -44,6 +45,9 @@ type item struct {
 	session    string   // if set, switch to this Herdr session
 	newSession bool     // ask for a name, then switch to that session
 	kill       string   // if set, stop this session after a second Enter
+	reconnect  string   // if set, reconnect this saved machine in a new tab
+	remote     bool     // built from saved machines; replaced on each refresh
+	next       bool     // the "Next blocked agent" entry
 }
 
 type snapshot struct {
@@ -131,7 +135,7 @@ func loadItems() []item {
 		for _, a := range s.Agents {
 			if a.AgentStatus == "blocked" && !a.Focused {
 				items = append(items, item{
-					section: secJump, title: "Next blocked agent · " + clean(a.Title), dot: "blocked",
+					section: secJump, title: "Next blocked agent · " + clean(a.Title), dot: "blocked", next: true,
 					args: []string{"agent", "focus", a.PaneID},
 				})
 				break
@@ -251,6 +255,8 @@ type model struct {
 	confirm    string // session awaiting a second Enter to be stopped
 	frame      int    // animation frame, advanced by tick
 	typedAt    int    // frame of the last key, keeps the cursor solid
+	machines   []machine
+	remoteBusy bool // a remote refresh is in flight
 }
 
 // ---- animation ----
@@ -292,9 +298,59 @@ func (m model) caret() string {
 }
 
 func newModel() model {
-	m := model{base: loadItems(), width: 80, height: 20}
+	var (
+		items []item
+		ms    []machine
+		wg    sync.WaitGroup
+	)
+	wg.Add(2)
+	go func() { defer wg.Done(); items = loadItems() }()
+	go func() { defer wg.Done(); ms = savedMachines() }()
+	wg.Wait()
+	m := model{base: append(items, machineItems(ms, nil, nil)...), width: 80, height: 20,
+		machines: ms, remoteBusy: len(ms) > 0}
 	m.filter()
 	return m
+}
+
+// setRemote replaces the remote rows and keeps the selected entry
+// selected. A remote "Next blocked agent" only shows when no local
+// agent is blocked; it goes first so it leads the Jump group.
+func (m *model) setRemote(remote []item) {
+	key := func(it item) string { return it.section + "\x00" + it.title + "\x00" + strings.Join(it.args, " ") }
+	sel := ""
+	if m.cursor < len(m.matches) {
+		sel = key(m.items[m.matches[m.cursor].Index])
+	}
+	var local []item
+	localNext := false
+	for _, it := range m.base {
+		if !it.remote {
+			local = append(local, it)
+			localNext = localNext || it.next
+		}
+	}
+	var base []item
+	for _, it := range remote {
+		if it.next && !localNext {
+			base = append(base, it)
+		}
+	}
+	base = append(base, local...)
+	for _, it := range remote {
+		if !it.next {
+			base = append(base, it)
+		}
+	}
+	m.base = base
+	m.filter()
+	for i, match := range m.matches {
+		if key(m.items[match.Index]) == sel {
+			m.cursor = i
+			break
+		}
+	}
+	m.ensureVisible()
 }
 
 type titles []item
@@ -332,7 +388,7 @@ func (m *model) filter() {
 	kept := m.matches[:0]
 	for _, match := range m.matches {
 		sec := m.items[match.Index].section
-		jump := sec == secJump || sec == secSessions
+		jump := sec == secJump || sec == secSessions || sec == secMachines
 		if (!sessionsOnly || sec == secSessions) && !(commandsOnly && jump) {
 			kept = append(kept, match)
 		}
@@ -440,6 +496,13 @@ func (m model) choose(it item) (tea.Model, tea.Cmd) {
 		c.Start()
 		return m, tea.Quit
 	}
+	if it.reconnect != "" {
+		if err := reconnectMachine(it.reconnect); err != nil {
+			m.err = "reconnect: " + err.Error()
+			return m, nil
+		}
+		return m, tea.Quit
+	}
 	if it.newSession {
 		m.naming = true
 		return m, nil
@@ -457,16 +520,29 @@ func (m model) choose(it item) (tea.Model, tea.Cmd) {
 	return m, m.run(it.args)
 }
 
-func (m model) Init() tea.Cmd { return tick() }
+func (m model) Init() tea.Cmd {
+	if m.remoteBusy {
+		return tea.Batch(tick(), loadRemote(m.machines))
+	}
+	return tick()
+}
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tickMsg:
 		m.frame++
+		cmds := []tea.Cmd{tick()}
 		if m.frame%10 == 0 {
-			return m, tea.Batch(tick(), refreshStatus)
+			cmds = append(cmds, refreshStatus)
 		}
-		return m, tick()
+		if m.frame%remoteEvery == 0 && !m.remoteBusy && len(m.machines) > 0 {
+			m.remoteBusy = true
+			cmds = append(cmds, loadRemote(m.machines))
+		}
+		return m, tea.Batch(cmds...)
+	case remoteMsg:
+		m.remoteBusy = false
+		m.setRemote(msg)
 	case statusMsg:
 		for _, list := range [][]item{m.base, m.items} {
 			for i := range list {
