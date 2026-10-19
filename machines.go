@@ -37,8 +37,14 @@ type machineStatus struct {
 	Error  string `json:"error"`
 }
 
-// remoteMsg carries the rebuilt remote rows: machine rows and remote Jump rows.
-type remoteMsg []item
+// remoteData is one background read: machine health and the snapshot
+// of every machine that answered, keyed by machine id.
+type remoteData struct {
+	status map[string]machineStatus
+	snaps  map[string]snapshot
+}
+
+type remoteMsg *remoteData
 
 // savedMachines reads the local machine catalog. It does not touch SSH.
 func savedMachines() []machine {
@@ -83,14 +89,41 @@ func machineDot(m machine, st machineStatus, checked bool) string {
 	return "blocked"
 }
 
-// machineItems builds the Machines group. Without status, the rows show
-// a grey dot until the background check returns. Enter on a reachable
-// machine focuses its focused workspace (focused maps id -> workspace);
-// on any other machine it opens a reconnect tab.
-func machineItems(ms []machine, status map[string]machineStatus, focused map[string]string) []item {
+// agentCounts summarizes a snapshot for a collapsed machine row.
+func agentCounts(snap snapshot) string {
+	agents, blocked := 0, 0
+	for _, a := range snap.Result.Snapshot.Agents {
+		agents++
+		if a.AgentStatus == "blocked" {
+			blocked++
+		}
+	}
+	out := fmt.Sprintf(" · %d agents", agents)
+	if agents == 1 {
+		out = " · 1 agent"
+	}
+	if blocked > 0 {
+		out += fmt.Sprintf(" · %d blocked", blocked)
+	}
+	return out
+}
+
+// machineItems builds the Machines group. Without data, the rows show a
+// grey dot until the background check returns. Enter on a reachable
+// machine focuses its focused workspace; on any other machine it opens
+// a reconnect tab. A collapsed machine sums up its agents in its row.
+func machineItems(ms []machine, data *remoteData, collapsed map[string]bool) []item {
 	var items []item
 	for _, m := range ms {
-		st, checked := status[m.ID]
+		var st machineStatus
+		checked := false
+		if data != nil {
+			st, checked = data.status[m.ID]
+		}
+		snap, hasSnap := snapshot{}, false
+		if data != nil {
+			snap, hasSnap = data.snaps[m.ID]
+		}
 		it := item{section: secMachines, title: clean(m.Label), remote: true,
 			dot: machineDot(m, st, checked)}
 		switch {
@@ -103,16 +136,50 @@ func machineItems(ms []machine, status map[string]machineStatus, focused map[str
 		case st.Status != "reachable":
 			it.title += " · " + clean(st.Status) + " · reconnect"
 			it.reconnect = m.ID
-		case focused[m.ID] != "":
-			it.args = []string{"--machine", m.ID, "workspace", "focus", focused[m.ID]}
+		case hasSnap && snap.Result.Snapshot.FocusedWorkspaceID != "":
+			it.args = []string{"--machine", m.ID, "workspace", "focus", snap.Result.Snapshot.FocusedWorkspaceID}
 		default:
 			it.reconnect = m.ID
 		}
-		items = append(items, it)
-		if m.Enabled {
-			items = append(items, item{section: secMachines, remote: true,
-				title: "Disable " + clean(m.Label), args: []string{"machine", "disable", m.ID}})
+		if collapsed[m.ID] && hasSnap {
+			it.title += agentCounts(snap)
 		}
+		items = append(items, it)
+		if !m.Enabled {
+			continue
+		}
+		fold := item{section: secMachines, remote: true, collapse: m.ID,
+			title: "Collapse " + clean(m.Label) + " in this session"}
+		if collapsed[m.ID] {
+			fold.title = "Expand " + clean(m.Label) + " in this session"
+		}
+		items = append(items, fold, item{section: secMachines, remote: true,
+			title: "Disable " + clean(m.Label), args: []string{"machine", "disable", m.ID}})
+	}
+	return items
+}
+
+// remoteItems builds every remote row: the Machines group, then the Jump
+// rows of each expanded machine, led by a remote "Next blocked agent".
+func remoteItems(ms []machine, data *remoteData, collapsed map[string]bool) []item {
+	items := machineItems(ms, data, collapsed)
+	if data == nil {
+		return items
+	}
+	var next *item
+	for _, m := range ms {
+		snap, ok := data.snaps[m.ID]
+		if !ok || collapsed[m.ID] {
+			continue
+		}
+		n, jump := remoteJumpItems(m, snap)
+		if next == nil {
+			next = n
+		}
+		items = append(items, jump...)
+	}
+	if next != nil {
+		items = append([]item{*next}, items...)
 	}
 	return items
 }
@@ -156,7 +223,8 @@ func remoteJumpItems(m machine, snap snapshot) (next *item, items []item) {
 }
 
 // loadRemote checks every machine and reads every enabled machine's
-// snapshot, side by side.
+// snapshot, side by side. Rows are built from the result by remoteItems,
+// so collapsing a machine needs no new read.
 func loadRemote(ms []machine) tea.Cmd {
 	return func() tea.Msg {
 		var (
@@ -185,46 +253,25 @@ func loadRemote(ms []machine) tea.Cmd {
 		}
 		wg.Wait()
 
-		status := map[string]machineStatus{}
+		data := &remoteData{status: map[string]machineStatus{}, snaps: map[string]snapshot{}}
 		for _, st := range statuses {
-			status[st.ID] = st
+			data.status[st.ID] = st
 		}
 		for i, m := range ms {
 			// A snapshot that came back proves the machine is reachable;
 			// a failed status check without one marks it unreachable.
 			if snaps[i] != nil {
-				status[m.ID] = machineStatus{ID: m.ID, Status: "reachable"}
-			} else if _, ok := status[m.ID]; !ok && m.Enabled {
+				data.snaps[m.ID] = *snaps[i]
+				data.status[m.ID] = machineStatus{ID: m.ID, Status: "reachable"}
+			} else if _, ok := data.status[m.ID]; !ok && m.Enabled {
 				reason := "unreachable"
 				if !statusOK {
 					reason = "no answer"
 				}
-				status[m.ID] = machineStatus{ID: m.ID, Status: reason}
+				data.status[m.ID] = machineStatus{ID: m.ID, Status: reason}
 			}
 		}
-
-		focused := map[string]string{}
-		for i, m := range ms {
-			if snaps[i] != nil {
-				focused[m.ID] = snaps[i].Result.Snapshot.FocusedWorkspaceID
-			}
-		}
-		items := machineItems(ms, status, focused)
-		var next *item
-		for i, m := range ms {
-			if snaps[i] == nil {
-				continue
-			}
-			n, jump := remoteJumpItems(m, *snaps[i])
-			if next == nil {
-				next = n
-			}
-			items = append(items, jump...)
-		}
-		if next != nil {
-			items = append([]item{*next}, items...)
-		}
-		return remoteMsg(items)
+		return remoteMsg(data)
 	}
 }
 

@@ -192,6 +192,9 @@ those machines and their agents next to your local ones.
 | Focus a remote workspace or agent | ✅ | Enter runs `herdr --machine <id> workspace focus` / `agent focus` |
 | Next blocked agent across machines | ✅ | Points to a blocked remote agent when no local agent is blocked |
 | Live remote statuses | ✅ | Remote rows refresh every 5 seconds while the palette is open |
+| Machines per session | ✅ | `machines` list per session in the palette config; the attach wrapper enables and disables machines on each switch. See [Machines per session](#machines-per-session) |
+| Collapse a machine per session | ✅ | "Collapse <machine> in this session": one summary row (`mac-mini · 3 agents · 1 blocked`), its agents leave Jump |
+| Collapse a machine in Herdr's sidebar | ❌ | Herdr has no API for its sidebar |
 | Remote plugin actions | ❌ | Not yet; the Actions group shows the local server's actions |
 | Remote sessions (switch, new, kill) | ❌ | Herdr does not forward `session` commands to saved machines |
 | Phone mode on a remote session | ➖ | Works when the palette is installed on the remote host (see [Remote servers and VMs](#remote-servers-and-vms)) |
@@ -206,6 +209,47 @@ Note: the palette that opens depends on where the focused session
 lives. Viewing a saved machine's workspace, the keybinding runs the
 palette installed on that machine, which lists that machine's own
 saved machines (usually none).
+
+### Machines per session
+
+Keep a machine out of a session, for example a personal Mac mini out
+of the session for client work. List the machines of each session in
+`~/.config/herdr/plugins/config/binb1.palette/config.toml` (the
+directory that `herdr plugin config-dir binb1.palette` prints):
+
+```toml
+[sessions.default]          # personal projects
+machines = ["robins-mac-mini"]
+
+[sessions.clients]          # client work: no saved machines
+machines = []
+```
+
+Names are machine labels or ids. A session without a `machines` list
+keeps the machines as they are.
+
+Herdr keeps one machine list for all windows, so the palette applies
+the setting when it attaches: before each attach, the
+[attach wrapper](#sessions) enables the machines of the target session
+and disables the others. Herdr connects and disconnects them in the
+background. The Machines group of a session shows only its machines.
+
+Limits:
+
+- Only the attach wrapper applies the setting. A client started with
+  plain `herdr` keeps the machines as they are.
+- Enable and disable apply to every Herdr window on this computer. With
+  two windows on different sessions, the last switch wins in both.
+
+### Collapse a machine
+
+"Collapse <machine> in this session" folds a machine in the palette:
+its row shows the agent count and the blocked count, and its
+workspaces and agents leave the Jump group (also "Next blocked
+agent"). "Expand <machine> in this session" brings them back. The
+palette remembers the choice per session in
+`~/.local/state/herdr-palette/collapsed.json`. Herdr's own sidebar is
+not affected.
 
 ## Phone mode
 
