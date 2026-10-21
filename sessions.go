@@ -38,6 +38,35 @@ func switchFile(wrapperPid int) string {
 	return filepath.Join(switchDir(), strconv.Itoa(wrapperPid))
 }
 
+// stableBin is a fixed path to this binary for the shell function that
+// starts the wrapper. The plugin root differs per install kind and, for a
+// GitHub install, changes on every update, so the shell must not use it.
+func stableBin() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".local", "state", "herdr-palette", "bin", "herdr-palette")
+}
+
+// linkStableBin points stableBin at the binary in the plugin root. It runs
+// on every plugin command, so the link follows updates and reinstalls.
+// install.sh makes the first link.
+func linkStableBin() {
+	root := os.Getenv("HERDR_PLUGIN_ROOT")
+	if root == "" {
+		return
+	}
+	target := filepath.Join(root, "bin", "herdr-palette")
+	link := stableBin()
+	if cur, err := os.Readlink(link); err == nil && cur == target {
+		return
+	}
+	os.MkdirAll(filepath.Dir(link), 0o755)
+	tmp := link + ".tmp"
+	os.Remove(tmp)
+	if os.Symlink(target, tmp) == nil {
+		os.Rename(tmp, link)
+	}
+}
+
 // attachArgs returns the herdr arguments that attach to a session.
 func attachArgs(name string) []string {
 	if name == "default" {

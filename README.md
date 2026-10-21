@@ -140,14 +140,17 @@ Herdr cannot move a client to another session, so start Herdr through
 the palette's wrapper:
 
 ```sh
-"$PLUGIN_ROOT/bin/herdr-palette" attach work   # instead of: herdr --session work
+~/.local/state/herdr-palette/bin/herdr-palette attach work   # instead of: herdr --session work
 ```
 
-`PLUGIN_ROOT` is the `plugin_root` that `herdr plugin list --json`
-prints. A shell function keeps it short:
+That path is a link to the plugin's binary. The install makes it, and
+the plugin updates it on each run, so it stays valid after an update
+or with a linked local checkout. (Do not use the `plugin_root` path: a
+GitHub install changes it on every update.) A shell function keeps it
+short:
 
 ```sh
-h() { /path/to/plugin/bin/herdr-palette attach "${1:-default}" }
+h() { ~/.local/state/herdr-palette/bin/herdr-palette attach "${1:-default}" }
 ```
 
 To route plain `herdr` and `herdr --session X` through the wrapper

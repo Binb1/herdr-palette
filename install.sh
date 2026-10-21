@@ -57,3 +57,9 @@ mkdir -p "$ROOT/bin"
 tar -xzf "$tmp/$archive" -C "$tmp"
 install -m 0755 "$tmp/$NAME" "$ROOT/bin/$NAME"
 echo "$NAME: installed $ROOT/bin/$NAME"
+
+# Stable path for the shell function that starts the session wrapper (see
+# README "Sessions"). The binary refreshes this link on every run too.
+link="$HOME/.local/state/$NAME/bin/$NAME"
+mkdir -p "$(dirname "$link")"
+ln -sfn "$ROOT/bin/$NAME" "$link"

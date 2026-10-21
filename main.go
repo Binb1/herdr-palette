@@ -766,6 +766,7 @@ func highlight(s string, matched []int, base, hit lipgloss.Style) string {
 }
 
 func main() {
+	linkStableBin()
 	if len(os.Args) > 1 && os.Args[1] == "phone" {
 		mode := ""
 		if len(os.Args) > 2 {
