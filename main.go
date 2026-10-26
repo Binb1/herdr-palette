@@ -318,7 +318,6 @@ func newModel() model {
 		session = currentSession(list)
 	}()
 	wg.Wait()
-	ms = sessionFilter(ms, session)
 	collapsed := loadCollapsed(session)
 	m := model{base: append(items, remoteItems(ms, nil, collapsed)...), width: 80, height: 20,
 		machines: ms, session: session, collapsed: collapsed, remoteBusy: len(ms) > 0}

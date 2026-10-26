@@ -12,7 +12,8 @@
 // Herdr keeps one machine catalog for every window, so the attach
 // wrapper enables the session's machines and disables the others before
 // each attach. A session without a "machines" list leaves the catalog
-// as it is.
+// as it is. The list is only the state at attach: the Machines group
+// shows every machine, so one can still be enabled or disabled by hand.
 //
 // Collapsing a machine is a palette view setting, remembered per session
 // in the palette state directory.
@@ -82,22 +83,6 @@ func applySessionMachines(session string) {
 			exec.Command(herdrBin(), "machine", verb, m.ID).Run()
 		}
 	}
-}
-
-// sessionFilter drops the machines a session does not list, so the
-// palette does not offer to enable them.
-func sessionFilter(ms []machine, session string) []machine {
-	allow, ok := sessionMachines(session)
-	if !ok {
-		return ms
-	}
-	var out []machine
-	for _, m := range ms {
-		if machineAllowed(m, allow) {
-			out = append(out, m)
-		}
-	}
-	return out
 }
 
 // collapsedFile maps session -> collapsed machine ids.

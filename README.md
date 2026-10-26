@@ -232,7 +232,9 @@ Herdr keeps one machine list for all windows, so the palette applies
 the setting when it attaches: before each attach, the
 [attach wrapper](#sessions) enables the machines of the target session
 and disables the others. Herdr connects and disconnects them in the
-background. The Machines group of a session shows only its machines.
+background. The list is only the state at attach: the Machines group
+still shows every machine, so you can enable or disable one by hand.
+The next switch or attach applies the list again.
 
 Limits:
 
