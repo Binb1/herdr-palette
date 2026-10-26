@@ -56,6 +56,7 @@ func attachMain(name string) {
 	defer os.Remove(file)
 	for {
 		os.Remove(file)
+		applySessionMachines(name)
 		c := exec.Command(herdrBin(), attachArgs(name)...)
 		c.Stdin, c.Stdout, c.Stderr = os.Stdin, os.Stdout, os.Stderr
 		err := c.Run()

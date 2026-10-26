@@ -46,6 +46,7 @@ type item struct {
 	newSession bool     // ask for a name, then switch to that session
 	kill       string   // if set, stop this session after a second Enter
 	reconnect  string   // if set, reconnect this saved machine in a new tab
+	collapse   string   // if set, fold or unfold this machine in this session
 	remote     bool     // built from saved machines; replaced on each refresh
 	next       bool     // the "Next blocked agent" entry
 }
@@ -251,12 +252,15 @@ type model struct {
 	renameBase []string // non-nil while asking for a name
 	naming     bool     // asking for a new session name
 	newName    string
-	err        string // shown in the footer after a failed switch
-	confirm    string // session awaiting a second Enter to be stopped
-	frame      int    // animation frame, advanced by tick
-	typedAt    int    // frame of the last key, keeps the cursor solid
-	machines   []machine
-	remoteBusy bool // a remote refresh is in flight
+	err        string          // shown in the footer after a failed switch
+	confirm    string          // session awaiting a second Enter to be stopped
+	frame      int             // animation frame, advanced by tick
+	typedAt    int             // frame of the last key, keeps the cursor solid
+	machines   []machine       // saved machines this session uses
+	session    string          // current Herdr session
+	collapsed  map[string]bool // machine ids folded in this session
+	remote     *remoteData     // last background read, nil before the first
+	remoteBusy bool            // a remote refresh is in flight
 }
 
 // ---- animation ----
@@ -299,16 +303,24 @@ func (m model) caret() string {
 
 func newModel() model {
 	var (
-		items []item
-		ms    []machine
-		wg    sync.WaitGroup
+		items   []item
+		ms      []machine
+		session string
+		wg      sync.WaitGroup
 	)
-	wg.Add(2)
+	wg.Add(3)
 	go func() { defer wg.Done(); items = loadItems() }()
 	go func() { defer wg.Done(); ms = savedMachines() }()
+	go func() {
+		defer wg.Done()
+		var list sessionList
+		herdrJSON(&list, "session", "list", "--json")
+		session = currentSession(list)
+	}()
 	wg.Wait()
-	m := model{base: append(items, machineItems(ms, nil, nil)...), width: 80, height: 20,
-		machines: ms, remoteBusy: len(ms) > 0}
+	collapsed := loadCollapsed(session)
+	m := model{base: append(items, remoteItems(ms, nil, collapsed)...), width: 80, height: 20,
+		machines: ms, session: session, collapsed: collapsed, remoteBusy: len(ms) > 0}
 	m.filter()
 	return m
 }
@@ -317,7 +329,12 @@ func newModel() model {
 // selected. A remote "Next blocked agent" only shows when no local
 // agent is blocked; it goes first so it leads the Jump group.
 func (m *model) setRemote(remote []item) {
-	key := func(it item) string { return it.section + "\x00" + it.title + "\x00" + strings.Join(it.args, " ") }
+	key := func(it item) string {
+		if it.collapse != "" { // its title flips between Collapse and Expand
+			return "collapse\x00" + it.collapse
+		}
+		return it.section + "\x00" + it.title + "\x00" + strings.Join(it.args, " ")
+	}
 	sel := ""
 	if m.cursor < len(m.matches) {
 		sel = key(m.items[m.matches[m.cursor].Index])
@@ -496,6 +513,12 @@ func (m model) choose(it item) (tea.Model, tea.Cmd) {
 		c.Start()
 		return m, tea.Quit
 	}
+	if it.collapse != "" {
+		m.collapsed[it.collapse] = !m.collapsed[it.collapse]
+		saveCollapsed(m.session, m.collapsed)
+		m.setRemote(remoteItems(m.machines, m.remote, m.collapsed))
+		return m, nil
+	}
 	if it.reconnect != "" {
 		if err := reconnectMachine(it.reconnect); err != nil {
 			m.err = "reconnect: " + err.Error()
@@ -542,7 +565,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 	case remoteMsg:
 		m.remoteBusy = false
-		m.setRemote(msg)
+		m.remote = msg
+		m.setRemote(remoteItems(m.machines, m.remote, m.collapsed))
 	case statusMsg:
 		for _, list := range [][]item{m.base, m.items} {
 			for i := range list {
